@@ -287,26 +287,46 @@ class SupabaseClient:
             }
         """
         try:
-            # Base query
-            query = self.client.table(self.table_name).select("enrichment_status")
+            # Use count queries instead of fetching all rows
+            # This avoids the default 1000 row limit and is more efficient
             
-            if repo:
-                query = query.eq("repo", repo)
-            
-            result = query.execute()
-            
-            # Count by status
             stats = {
-                'total': len(result.data),
+                'total': 0,
                 'pending': 0,
                 'success': 0,
                 'failed': 0
             }
             
-            for row in result.data:
-                status = row.get('enrichment_status', 'pending')
-                if status in stats:
-                    stats[status] += 1
+            # Count total PRs
+            query = self.client.table(self.table_name).select("*", count="exact", head=True)
+            if repo:
+                query = query.eq("repo", repo)
+            result = query.execute()
+            stats['total'] = result.count or 0
+            
+            # Count pending PRs
+            query = self.client.table(self.table_name).select("*", count="exact", head=True)
+            if repo:
+                query = query.eq("repo", repo)
+            query = query.eq("enrichment_status", "pending")
+            result = query.execute()
+            stats['pending'] = result.count or 0
+            
+            # Count success PRs
+            query = self.client.table(self.table_name).select("*", count="exact", head=True)
+            if repo:
+                query = query.eq("repo", repo)
+            query = query.eq("enrichment_status", "success")
+            result = query.execute()
+            stats['success'] = result.count or 0
+            
+            # Count failed PRs
+            query = self.client.table(self.table_name).select("*", count="exact", head=True)
+            if repo:
+                query = query.eq("repo", repo)
+            query = query.eq("enrichment_status", "failed")
+            result = query.execute()
+            stats['failed'] = result.count or 0
             
             return stats
             
