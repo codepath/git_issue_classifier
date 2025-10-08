@@ -92,7 +92,7 @@ git_issue_classifier/
 Fetch and classify PRs from a repository:
 
 ```bash
-# Fetch 1000 merged PRs (default)
+# Fetch 1000 merged PRs (default) and enrich them
 uv run python main.py fetch facebook/react
 
 # Fetch 500 PRs
@@ -100,6 +100,15 @@ uv run python main.py fetch facebook/react --limit 500
 
 # Fetch 5000 PRs (takes ~1000 API calls)
 uv run python main.py fetch microsoft/vscode --limit 5000
+
+# Fetch PRs but skip enrichment (index only)
+uv run python main.py fetch facebook/react --no-enrich
+
+# Enrich existing PRs without fetching new ones (retry failed/pending enrichments)
+uv run python main.py fetch facebook/react --enrich-only
+
+# Enrich ALL pending/failed PRs across ALL repositories
+uv run python main.py fetch --enrich-only
 
 # Classify fetched PRs (coming soon)
 uv run python main.py classify facebook/react
@@ -112,10 +121,17 @@ uv run python main.py run facebook/react
 ```
 
 **How it works:**
-- `fetch` command fetches PR metadata and enriches with files, diffs, and linked issues
-- Idempotent: safe to run multiple times, skips already-enriched PRs
-- Resumable: if interrupted, just run again to continue from where it left off
+- **Phase 1 (Index)**: Fetches PR metadata from GitHub and stores in database
+- **Phase 2 (Enrichment)**: Adds files, diffs, linked issues, and comments to each PR
+- **Idempotent**: Safe to run multiple times, skips already-enriched PRs
+- **Resumable**: If interrupted, just run again to continue from where it left off
+- **Rate limiting**: Automatically waits when GitHub API rate limit is hit
 - Default limit: 1000 PRs (automatically handles pagination)
+
+**Flags:**
+- `--limit N`: Fetch up to N PRs (default: 1000)
+- `--no-enrich`: Skip Phase 2, only fetch and index PRs
+- `--enrich-only`: Skip Phase 1, only enrich PRs already in database (pending/failed). If repository is omitted, enriches all repositories.
 
 ### Stage 2: Multiple Repositories (Planned)
 
