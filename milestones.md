@@ -170,22 +170,7 @@ This allows resuming enrichment on failures without re-indexing.
 
 ---
 
-## Milestone 9: Rate Limiting & Retries
-**Goal:** Handle API rate limits gracefully
-
-- [ ] Create `utils/rate_limiter.py` with retry logic
-- [ ] Implement exponential backoff for rate limit errors (429)
-- [ ] Add retry logic for transient network errors
-- [ ] Log rate limit status (remaining requests)
-- [ ] Abort immediately on auth failures (401, 403)
-
-**Manual Test:** Fetch multiple PRs in quick succession, verify rate limiting is respected
-
-**Design Note:** Add rate limiting decorator to fetcher methods in Milestone 6-7 to avoid hitting GitHub's 5000 req/hour limit
-
----
-
-## Milestone 10: LLM Client Setup
+## Milestone 9: LLM Client Setup
 **Goal:** Set up connection to Claude or OpenAI
 
 - [ ] Create `classifier/llm_client.py` with support for Claude and OpenAI
@@ -198,7 +183,7 @@ This allows resuming enrichment on failures without re-indexing.
 
 ---
 
-## Milestone 11: Classification Prompt Builder
+## Milestone 10: Classification Prompt Builder
 **Goal:** Build effective prompts from PR data
 
 - [ ] Create `classifier/prompt_builder.py`
@@ -213,7 +198,7 @@ This allows resuming enrichment on failures without re-indexing.
 
 ---
 
-## Milestone 12: LLM Classification Implementation
+## Milestone 11: LLM Classification Implementation
 **Goal:** Classify PRs using LLM
 
 - [ ] Create `classifier/classifier.py` with main classification logic
@@ -235,20 +220,7 @@ This allows resuming enrichment on failures without re-indexing.
 
 ---
 
-## Milestone 13: Batch Processing
-**Goal:** Process multiple PRs efficiently
-
-- [ ] Implement CLI option to specify PR range (e.g., #100-110)
-- [ ] Add progress tracking and logging
-- [ ] Skip already-classified PRs (check Supabase first)
-- [ ] Add option to force re-classification
-- [ ] Implement graceful shutdown on interrupt
-
-**Manual Test:** Process 5-10 PRs from a repo, verify all are saved and classified
-
----
-
-## Milestone 14: Google Sheets Export
+## Milestone 12: Google Sheets Export
 **Goal:** Export summary data to Google Sheets
 
 - [ ] Set up Google Sheets API credentials
@@ -262,77 +234,6 @@ This allows resuming enrichment on failures without re-indexing.
 - [ ] Handle updates to existing sheet
 
 **Manual Test:** Export 10 classified PRs to a new Google Sheet, verify formatting and data accuracy
-
----
-
-## Milestone 15: CLI Interface
-**Goal:** Create polished command-line interface
-
-- [ ] Create `main.py` with argument parsing (argparse or click)
-- [ ] Support commands:
-  - `index` - fetch PR index and save to Supabase
-  - `enrich` - enrich pending/failed PRs
-  - `classify` - classify enriched PRs
-  - `export` - export to Google Sheets
-  - `run` - do all phases in sequence
-- [ ] Add flags for:
-  - Repo specification
-  - PR number range
-  - Force re-fetch/re-classify
-  - Dry-run mode
-- [ ] Add help text and usage examples
-
-**Manual Test:** Run complete workflow from command line: index → enrich → classify → export
-
----
-
-## Milestone 16: Error Recovery & Observability
-**Goal:** Improve debugging and error recovery
-
-- [ ] Enhance logging with structured output (JSON logs optional)
-- [ ] Add summary statistics at end (PRs processed, success rate, errors)
-- [ ] Create error report function to show all fetch/classification failures
-- [ ] Add health check command to verify all credentials and connections
-
-**Manual Test:** 
-- Run with invalid credentials, verify clear error message
-- Run health check command to verify all services are accessible
-
----
-
-## Milestone 17: Documentation & Examples
-**Goal:** Complete documentation for users
-
-- [ ] Update README with:
-  - Installation instructions (using `uv sync`)
-  - Configuration guide
-  - Usage examples
-  - Troubleshooting tips
-- [ ] Add docstrings to all public methods
-- [ ] Create example config files
-- [ ] Add example output (sample classification)
-
-**Manual Test:** Follow README instructions from scratch on a fresh clone
-
----
-
-## Future Milestones (Not in Initial Scope)
-
-### Milestone 19: GitLab Support
-- [ ] Create `fetchers/gitlab.py` following same interface as GitHub
-- [ ] Adapt data models for GitLab-specific fields
-- [ ] Test with sample GitLab project
-
-### Milestone 20: Advanced Filtering
-- [ ] Filter by date range
-- [ ] Exclude very small PRs (< 10 lines changed)
-- [ ] Exclude very large PRs (> 1000 lines changed)
-- [ ] Filter by labels or PR status
-
-### Milestone 21: Web UI
-- [ ] Browse classified PRs
-- [ ] Filter by difficulty/category
-- [ ] Mark PRs as "completed" for learning progress tracking
 
 ---
 
