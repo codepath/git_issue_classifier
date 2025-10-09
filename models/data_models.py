@@ -10,8 +10,13 @@ class Classification(BaseModel):
     
     This is our controlled output format that the LLM will populate.
     """
-    difficulty: Literal["easy", "medium", "hard"]
-    concepts: list[str]
+    difficulty: Literal["trivial", "easy", "medium", "hard"]
+    task_clarity: Literal["clear", "partial", "poor"]
+    is_reproducible: Literal["highly likely", "maybe", "unclear"]
+    onboarding_suitability: Literal["excellent", "poor"]
+    categories: list[str]
+    concepts_taught: list[str]
+    prerequisites: list[str]
     reasoning: str
 
 
