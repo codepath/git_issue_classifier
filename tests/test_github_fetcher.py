@@ -25,15 +25,13 @@ class TestGitHubFetcherInit:
 class TestFetchPRList:
     """Tests for fetch_pr_list method."""
     
-    def test_fetch_pr_list_filters_merged_with_single_issue(self):
-        """Verify only merged PRs with exactly one linked issue are returned."""
+    def test_fetch_pr_list_filters_merged(self):
+        """Verify only merged PRs are returned (no issue filtering in fetcher)."""
         fetcher = GitHubFetcher(token="test_token")
         
         # Mock response with mixed PRs:
-        # - Merged + single issue (keep)
-        # - Merged + no issue (filter out)
-        # - Merged + multiple issues (filter out)
-        # - Not merged + single issue (filter out)
+        # - Merged PRs (keep all)
+        # - Not merged (filter out)
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"X-RateLimit-Remaining": "4999", "X-RateLimit-Limit": "5000"}
@@ -55,10 +53,12 @@ class TestFetchPRList:
         assert call_args[1]["params"]["state"] == "closed"
         assert call_args[1]["params"]["per_page"] == 100
         
-        # Verify only merged PRs with single linked issue returned
-        assert len(result) == 2
+        # Verify all merged PRs returned (4 merged, 1 not merged)
+        assert len(result) == 4
         assert result[0]["number"] == 1
-        assert result[1]["number"] == 5
+        assert result[1]["number"] == 2
+        assert result[2]["number"] == 3
+        assert result[3]["number"] == 5
         assert all(pr["merged_at"] is not None for pr in result)
     
     def test_fetch_pr_list_pagination_stops_at_max_pages(self):
@@ -177,42 +177,42 @@ class TestExtractIssueNumbers:
         """Test extracting a single issue reference."""
         fetcher = GitHubFetcher(token="test_token")
         
-        result = fetcher._extract_issue_numbers("Fixes #123")
+        result = fetcher.extract_issue_numbers("Fixes #123")
         assert result == [123]
     
     def test_extract_multiple_issues(self):
         """Test extracting multiple issue references."""
         fetcher = GitHubFetcher(token="test_token")
         
-        result = fetcher._extract_issue_numbers("Fixes #123 and closes #456")
+        result = fetcher.extract_issue_numbers("Fixes #123 and closes #456")
         assert result == [123, 456]
     
     def test_extract_no_issues(self):
         """Test with no issue references."""
         fetcher = GitHubFetcher(token="test_token")
         
-        result = fetcher._extract_issue_numbers("This is a PR without issue refs")
+        result = fetcher.extract_issue_numbers("This is a PR without issue refs")
         assert result == []
     
     def test_extract_with_none_body(self):
         """Test with None as PR body."""
         fetcher = GitHubFetcher(token="test_token")
         
-        result = fetcher._extract_issue_numbers(None)
+        result = fetcher.extract_issue_numbers(None)
         assert result == []
     
     def test_extract_case_insensitive(self):
         """Test that extraction is case insensitive."""
         fetcher = GitHubFetcher(token="test_token")
         
-        result = fetcher._extract_issue_numbers("FIXES #123, Closes #456, resolves #789")
+        result = fetcher.extract_issue_numbers("FIXES #123, Closes #456, resolves #789")
         assert result == [123, 456, 789]
     
     def test_extract_removes_duplicates(self):
         """Test that duplicate issue numbers are removed."""
         fetcher = GitHubFetcher(token="test_token")
         
-        result = fetcher._extract_issue_numbers("Fixes #123, closes #123, fixes #456")
+        result = fetcher.extract_issue_numbers("Fixes #123, closes #123, fixes #456")
         assert result == [123, 456]
 
 

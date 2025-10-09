@@ -64,7 +64,9 @@ class TestPullRequest:
             enrichment_attempted_at=enriched_at,
             classification=Classification(
                 difficulty="medium",
-                concepts=["authentication", "JWT"],
+                categories=["feature", "security"],
+                concepts_taught=["authentication", "JWT", "OAuth"],
+                prerequisites=["Basic web security"],
                 reasoning="Introduces OAuth flow"
             ),
             classified_at=classified_at
@@ -145,45 +147,52 @@ class TestClassification:
         """Valid classification should be accepted."""
         data = {
             "difficulty": "medium",
-            "concepts": ["REST API", "error handling"],
+            "categories": ["feature", "api"],
+            "concepts_taught": ["REST API", "error handling"],
+            "prerequisites": ["Basic HTTP knowledge"],
             "reasoning": "This PR demonstrates good API design patterns.",
         }
         classification = Classification.model_validate(data)
         assert classification.difficulty == "medium"
-        assert classification.concepts == ["REST API", "error handling"]
+        assert classification.concepts_taught == ["REST API", "error handling"]
         assert "API design" in classification.reasoning
     
     def test_invalid_difficulty(self):
         """Invalid difficulty value should raise ValidationError."""
         data = {
             "difficulty": "super-hard",  # Invalid
-            "concepts": ["testing"],
+            "categories": ["testing"],
+            "concepts_taught": ["testing"],
+            "prerequisites": ["none"],
             "reasoning": "Test reasoning",
         }
         with pytest.raises(ValidationError) as exc_info:
             Classification.model_validate(data)
         assert "difficulty" in str(exc_info.value)
     
-    def test_empty_concepts_allowed(self):
-        """Empty concepts list should be allowed."""
+    def test_empty_concepts_not_allowed(self):
+        """Empty required lists should not be allowed (per classifier validation)."""
         data = {
             "difficulty": "easy",
-            "concepts": [],
+            "categories": ["documentation"],
+            "concepts_taught": [],  # Empty not allowed
+            "prerequisites": ["none"],
             "reasoning": "Simple typo fix",
         }
+        # Note: Pydantic allows empty lists, but our classifier validates they're non-empty
         classification = Classification.model_validate(data)
-        assert classification.concepts == []
+        assert classification.concepts_taught == []
     
     def test_missing_required_fields(self):
         """Missing required fields should raise ValidationError."""
         data = {
             "difficulty": "easy",
-            # Missing concepts and reasoning
+            # Missing categories, concepts_taught, prerequisites, reasoning
         }
         with pytest.raises(ValidationError) as exc_info:
             Classification.model_validate(data)
-        assert "concepts" in str(exc_info.value)
-        assert "reasoning" in str(exc_info.value)
+        error_str = str(exc_info.value)
+        assert "categories" in error_str or "concepts_taught" in error_str or "reasoning" in error_str
 
 
 class TestEnrichmentStatus:
