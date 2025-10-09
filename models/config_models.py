@@ -1,28 +1,36 @@
 """Configuration models for validation using Pydantic."""
 
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class CredentialsConfig(BaseModel):
     """API credentials loaded from environment variables."""
     
-    github_token: str = Field(..., min_length=1, description="GitHub personal access token")
+    # Platform tokens (at least one required)
+    github_token: Optional[str] = Field(None, description="GitHub personal access token (for GitHub repos)")
+    gitlab_token: Optional[str] = Field(None, description="GitLab personal access token (for GitLab repos)")
+    
+    # Supabase (required)
     supabase_url: str = Field(..., min_length=1, description="Supabase project URL")
     supabase_key: str = Field(..., min_length=1, description="Supabase API key")
     database_url: Optional[str] = Field(None, description="PostgreSQL database URL (optional, for schema setup)")
     
-    # Optional until we implement LLM classification (Milestone 11)
+    # LLM configuration (Milestones 10-14)
     anthropic_api_key: Optional[str] = Field(None, description="Anthropic API key for Claude")
     openai_api_key: Optional[str] = Field(None, description="OpenAI API key")
+    llm_provider: str = Field(default="anthropic", description="LLM provider: 'anthropic' or 'openai'")
+    llm_model: str = Field(default="claude-sonnet-4-5-20250929", description="LLM model name")
     
-    @field_validator("github_token")
-    @classmethod
-    def validate_github_token(cls, v: str) -> str:
-        """Validate GitHub token format."""
-        if not v or v == "ghp_your_token_here":
-            raise ValueError("GitHub token must be set in .env file")
-        return v
+    @model_validator(mode='after')
+    def validate_at_least_one_platform_token(self):
+        """Ensure at least one platform token is set."""
+        if not self.github_token and not self.gitlab_token:
+            raise ValueError(
+                "At least one platform token must be set: GITHUB_TOKEN or GITLAB_TOKEN. "
+                "Set one or both in your .env file depending on which platforms you want to use."
+            )
+        return self
     
     @field_validator("supabase_url")
     @classmethod

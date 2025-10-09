@@ -29,7 +29,8 @@ def load_config() -> Config:
     try:
         config = Config(
             credentials=CredentialsConfig(
-                github_token=os.getenv("GITHUB_TOKEN", ""),
+                github_token=os.getenv("GITHUB_TOKEN"),
+                gitlab_token=os.getenv("GITLAB_TOKEN"),
                 supabase_url=os.getenv("SUPABASE_URL", ""),
                 supabase_key=os.getenv("SUPABASE_KEY", ""),
                 database_url=os.getenv("DATABASE_URL"),

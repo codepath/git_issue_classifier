@@ -43,11 +43,12 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     body TEXT,
     merged_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    linked_issue_number INTEGER,  -- Parsed from PR body during index phase
+    linked_issue_number INTEGER,  -- Phase 1 hint: parsed from description
+    platform TEXT NOT NULL DEFAULT 'github',  -- NEW: 'github' or 'gitlab'
     
     -- Enriched Data (from enrichment phase - Phase 2) - NULLABLE
     files JSONB,
-    linked_issue JSONB,
+    linked_issue JSONB,  -- For GitHub: single issue object; for GitLab: array of issues
     issue_comments JSONB,
     
     -- Enrichment Status Tracking
@@ -69,7 +70,7 @@ CREATE TABLE IF NOT EXISTS classifications (
     pr_id BIGINT REFERENCES pull_requests(id) ON DELETE CASCADE,
     
     -- Denormalized PR info (for standalone export)
-    github_url TEXT NOT NULL,
+    repo_url TEXT NOT NULL,
     repo TEXT NOT NULL,
     pr_number INTEGER NOT NULL,
     title TEXT NOT NULL,
@@ -78,6 +79,9 @@ CREATE TABLE IF NOT EXISTS classifications (
     
     -- Classification fields
     difficulty TEXT CHECK (difficulty IN ('trivial', 'easy', 'medium', 'hard')),
+    task_clarity TEXT CHECK (task_clarity IN ('clear', 'partial', 'poor')),
+    is_reproducible TEXT CHECK (is_reproducible IN ('highly likely', 'maybe', 'unclear')),
+    onboarding_suitability TEXT CHECK (onboarding_suitability IN ('excellent', 'poor')),
     categories TEXT[],
     concepts_taught TEXT[],
     prerequisites TEXT[],
@@ -95,7 +99,11 @@ CREATE_INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_enrichment_status ON pull_requests(enrichment_status);",
     "CREATE INDEX IF NOT EXISTS idx_repo ON pull_requests(repo);",
     "CREATE INDEX IF NOT EXISTS idx_merged_at ON pull_requests(merged_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_platform ON pull_requests(platform);",  # NEW: For platform filtering
     "CREATE INDEX IF NOT EXISTS idx_classifications_difficulty ON classifications(difficulty);",
+    "CREATE INDEX IF NOT EXISTS idx_classifications_task_clarity ON classifications(task_clarity);",
+    "CREATE INDEX IF NOT EXISTS idx_classifications_reproducible ON classifications(is_reproducible);",
+    "CREATE INDEX IF NOT EXISTS idx_classifications_onboarding ON classifications(onboarding_suitability);",
     "CREATE INDEX IF NOT EXISTS idx_classifications_repo ON classifications(repo);",
     "CREATE INDEX IF NOT EXISTS idx_classifications_merged_at ON classifications(merged_at DESC);",
 ]
@@ -199,7 +207,7 @@ def verify_schema(conn) -> bool:
         """)
         indexes = [row[0] for row in cursor.fetchall()]
         
-        expected_indexes = ['idx_enrichment_status', 'idx_repo', 'idx_merged_at']
+        expected_indexes = ['idx_enrichment_status', 'idx_repo', 'idx_merged_at', 'idx_platform']
         for idx in expected_indexes:
             if idx in indexes:
                 logger.info(f"✓ Index '{idx}' exists")
@@ -214,7 +222,7 @@ def verify_schema(conn) -> bool:
         """)
         indexes = [row[0] for row in cursor.fetchall()]
         
-        expected_indexes = ['idx_classifications_difficulty', 'idx_classifications_repo', 'idx_classifications_merged_at']
+        expected_indexes = ['idx_classifications_difficulty', 'idx_classifications_task_clarity', 'idx_classifications_reproducible', 'idx_classifications_onboarding', 'idx_classifications_repo', 'idx_classifications_merged_at']
         for idx in expected_indexes:
             if idx in indexes:
                 logger.info(f"✓ Index '{idx}' exists")

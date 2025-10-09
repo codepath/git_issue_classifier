@@ -148,6 +148,40 @@ VERIFYING SCHEMA
 ✓ Schema verification successful
 ```
 
+### Step 4: Create Required Functions
+
+After creating the tables, you need to create PostgreSQL functions for efficient queries.
+
+**Function: `get_distinct_repos()`**
+
+This function returns unique repository names for the PR Explorer web UI.
+
+1. Go to **Supabase Dashboard** → **SQL Editor**
+2. Click **New Query**
+3. Paste the following SQL:
+
+```sql
+CREATE OR REPLACE FUNCTION get_distinct_repos()
+RETURNS TABLE(repo TEXT) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT DISTINCT pull_requests.repo
+  FROM pull_requests
+  ORDER BY pull_requests.repo;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+4. Click **Run** to create the function
+
+**Verify it works:**
+
+```sql
+SELECT * FROM get_distinct_repos();
+```
+
+You should see a list of unique repository names.
+
 ## Advanced Usage
 
 ### Drop and Recreate Schema (DANGEROUS)
@@ -204,28 +238,3 @@ If you need to modify the schema later:
 1. **Add a column**: Use SQL `ALTER TABLE` in Supabase SQL Editor
 2. **Add an index**: Update `CREATE_INDEXES_SQL` in `setup_database.py`
 3. **Re-run setup**: Safe to run multiple times (uses `IF NOT EXISTS`)
-
-## Design Rationale
-
-### Two-Phase Structure
-
-The schema separates cheap, reliable operations (Phase 1) from expensive, error-prone operations (Phase 2):
-
-**Why?**
-- Index endpoint: 1 API call for 100 PRs, rarely fails
-- Enrichment: 1-3 API calls per PR, can fail individually
-- Can resume enrichment without re-indexing
-
-### Status Tracking
-
-The `enrichment_status` field enables:
-- **Resumable workflow**: Query for PRs that need work
-- **Error recovery**: Retry only failed PRs
-- **Progress tracking**: Know exactly what's done/pending
-
-### JSONB Fields
-
-Using JSONB for `files`, `linked_issue`, `issue_comments`, and `classification` provides:
-- **Flexibility**: Schema can evolve without migrations
-- **Rich queries**: Can query inside JSON with PostgreSQL
-- **Compact storage**: No need for multiple related tables
