@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Read(//var/folders/tz/nkyq2f393sq5vlxybml7zk4m0000gn/T/TemporaryItems/NSIRD_screencaptureui_7zQirh/**)",
+      "Read(//var/folders/tz/nkyq2f393sq5vlxybml7zk4m0000gn/T/TemporaryItems/NSIRD_screencaptureui_QOsofA/**)",
+      "Bash(curl http://127.0.0.1:8000/api/prs/chatboxai/chatbox/2597)",
+      "Bash(python3:*)",
+      "Read(//var/folders/tz/nkyq2f393sq5vlxybml7zk4m0000gn/T/TemporaryItems/NSIRD_screencaptureui_rCyskp/**)",
+      "Bash(curl http://127.0.0.1:8000/api/prs/gitlab-org/gitlab/207841)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

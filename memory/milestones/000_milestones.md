@@ -170,57 +170,152 @@ This allows resuming enrichment on failures without re-indexing.
 
 ---
 
-## Milestone 9: LLM Client Setup
-**Goal:** Set up connection to Claude or OpenAI
+## Milestone 9: Context Builder
+**Goal:** Extract PR context into formatted string for LLM
 
-- [ ] Create `classifier/llm_client.py` with support for Claude and OpenAI
-- [ ] Implement authentication from config
-- [ ] Create basic `classify()` method that sends prompt and receives response
-- [ ] Add error handling for LLM API failures
-- [ ] Add token usage logging
+- [ ] Create `classifier/context_builder.py`
+- [ ] Implement `build_pr_context(pr_data: dict) -> str`:
+  - Takes PR dict (title, body, files with diffs, linked issue, comments)
+  - Returns formatted string with sections:
+    - PR metadata (title, author, merged date)
+    - PR body
+    - Changed files with diffs
+    - Linked issue context (if present)
+    - Issue comments (if present)
+  - Handle missing/optional fields gracefully
+  - Add clear section markers for readability
+- [ ] Keep it under token limits (truncate if needed - rough target: ~20k tokens)
 
-**Manual Test:** Send a simple test prompt to LLM and print response
+**Manual Test:** Build context from 3 sample PRs (simple, with issue, complex), print and verify formatting
 
----
-
-## Milestone 10: Classification Prompt Builder
-**Goal:** Build effective prompts from PR data
-
-- [ ] Create `classifier/prompt_builder.py`
-- [ ] Design prompt template that includes:
-  - PR title, body, and metadata
-  - Linked issue context (issue body + comments if present)
-  - Changed files with diffs (already truncated to 100 lines per file)
-- [ ] Handle token limits by truncating/summarizing large content
-- [ ] Build structured prompt requesting specific classification fields
-
-**Manual Test:** Build prompt from a sample PR and print it to verify structure and content
+**Design Rationale:**
+- **Shared component**: Explorer GUI will import this to show "what the LLM sees"
+- **Pure function**: No LLM or database dependencies - just PR data in, formatted string out
+- **Token-aware**: Truncates content to stay within reasonable limits
 
 ---
 
-## Milestone 11: LLM Classification Implementation
-**Goal:** Classify PRs using LLM
+## Milestone 10: LLM Client
+**Goal:** Send prompts to Claude or OpenAI and get responses
 
-- [ ] Create `classifier/classifier.py` with main classification logic
-- [ ] Implement classification for all dimensions:
-  - Difficulty (easy/medium/hard)
-  - Categories (backend/frontend/infrastructure/etc)
-  - Learning value (high/medium/low)
-  - Estimated time (hours)
-  - Concepts taught
-  - Prerequisites
-  - Reasoning
-- [ ] Parse LLM response into `Classification` model
-- [ ] Save classification to Supabase
-- [ ] Handle classification errors gracefully
+- [ ] Add dependencies: `openai` and `anthropic` to pyproject.toml
+- [ ] Add to config: `LLM_PROVIDER` (claude/openai), `LLM_MODEL`, `LLM_API_KEY`
+- [ ] Create `classifier/llm_client.py` with `LLMClient` class
+- [ ] Implement `__init__()` - read provider + model + API key from config
+- [ ] Implement `send_prompt(prompt: str) -> str`:
+  - Route to correct provider (Claude vs OpenAI)
+  - Handle authentication
+  - Make API call with appropriate parameters
+  - Return text response
+  - Log token usage
+- [ ] Add basic error handling (rate limits, auth failures)
 
-**Manual Test:** Classify a sample PR and verify all fields are populated reasonably
+**Manual Test:** Send 2-3 simple test prompts to both Claude and OpenAI, verify responses
 
-**Design Note:** Only classify PRs with `enrichment_status='success'` - partial data may give poor classifications
+**Design Rationale:**
+- **Provider-agnostic**: Single interface for multiple LLM providers
+- **Dumb wrapper**: No PR/classification logic - just sends text, gets text back
+- **Use OpenAI client**: Can handle both OpenAI and Claude models
 
 ---
 
-## Milestone 12: Google Sheets Export
+## Milestone 11: Classification Prompt Template
+**Goal:** Define the prompt structure for classification
+
+- [ ] Create `classifier/prompt_template.py` with `CLASSIFICATION_PROMPT` constant
+- [ ] Design prompt that:
+  - Explains the classification task
+  - Lists all required fields (difficulty, categories, concepts, prerequisites, reasoning)
+  - Provides clear instructions for each field
+  - Requests JSON output format
+  - Includes examples (1-2 sample classifications)
+- [ ] Keep prompt concise (target: ~1k tokens)
+
+**Manual Test:** Review prompt manually, ensure it's clear and complete
+
+**Design Rationale:**
+- **Separate from code**: Makes it easy to iterate on prompt without touching code
+- **Configuration, not logic**: Just the template, no processing
+- **Examples included**: Few-shot learning improves classification quality
+
+---
+
+## Milestone 12: Classifier Implementation
+**Goal:** Combine context + prompt + LLM to classify PRs
+
+- [ ] Create `classifier/classifier.py` with `Classifier` class
+- [ ] Implement `__init__()` - create `LLMClient` instance
+- [ ] Implement `classify_pr(pr_data: dict) -> dict`:
+  - Call `build_pr_context(pr_data)` to get formatted context
+  - Combine with `CLASSIFICATION_PROMPT` template
+  - Call `llm_client.send_prompt()`
+  - Parse JSON response into dict
+  - Validate required fields are present
+  - Return classification dict
+- [ ] Handle parsing errors (malformed JSON, missing fields)
+- [ ] Add retry logic (1-2 retries if parsing fails)
+
+**Manual Test:** Classify 3 sample PRs, verify all fields populated reasonably
+
+**Design Rationale:**
+- **Orchestrator**: Combines context builder + prompt + LLM client
+- **No database logic**: Takes PR data, returns classification - doesn't touch Supabase
+- **Error handling**: Retries on parse failures, raises exception on persistent failures
+
+---
+
+## Milestone 13: Supabase Classification Methods
+**Goal:** Add database methods for classification workflow
+
+- [ ] Add to `storage/supabase_client.py`:
+  - `get_unclassified_prs(repo: str, limit: int) -> list[dict]`
+    - Query PRs where `enrichment_status='success'`
+    - LEFT JOIN classifications table
+    - WHERE classification is NULL
+    - ORDER BY merged_at DESC
+    - LIMIT to requested amount
+  - `save_classification(repo: str, pr_number: int, classification: dict) -> None`
+    - Insert into classifications table
+    - Include denormalized fields (github_url, title, etc.)
+    - Use UPSERT (idempotent)
+
+**Manual Test:** Query unclassified PRs, verify results; save test classification, verify in Supabase
+
+**Design Rationale:**
+- **Database logic isolated**: Can test with real Supabase data
+- **Idempotent operations**: UPSERT allows re-running safely
+- **Denormalized classifications**: Self-contained for easy export to Google Sheets
+
+---
+
+## Milestone 14: CLI Classify Command
+**Goal:** User-facing command to classify PRs
+
+- [ ] Add `classify` command to `main.py`:
+  - CLI: `python main.py classify facebook/react --limit 100`
+  - Query unclassified PRs via `get_unclassified_prs()`
+  - Loop through each PR:
+    - Call `classifier.classify_pr(pr_data)`
+    - Save via `save_classification()`
+    - Handle errors, continue on failures
+  - Progress logging every 10 PRs
+  - Summary stats (classified, skipped, failed)
+- [ ] Default limit: 100 PRs
+- [ ] Make idempotent (skip already-classified PRs)
+
+**Manual Test:**
+1. Run `python main.py classify facebook/react --limit 20`
+2. Verify classifications saved to Supabase
+3. Run again - verify skips already-classified PRs
+
+**Design Rationale:**
+- **Mirrors `fetch` command**: Same UX pattern - idempotent, resumable, safe to re-run
+- **Driver orchestrates**: Fetches data, calls classifier, saves results
+- **Continue on failures**: Don't crash entire batch if one PR fails to classify
+
+---
+
+## Milestone 15: Google Sheets Export
 **Goal:** Export summary data to Google Sheets
 
 - [ ] Set up Google Sheets API credentials
@@ -240,7 +335,7 @@ This allows resuming enrichment on failures without re-indexing.
 ## Progress Tracking
 
 **Current Milestone:** 9  
-**Completed:** 8/17  
+**Completed:** 8/19  
 **In Progress:** 0  
 **Blocked:** 0
 
@@ -360,3 +455,27 @@ This allows resuming enrichment on failures without re-indexing.
 - Caller handles retry logic, not the fetcher
 - Per-PR status tracking in Supabase is sufficient ('pending', 'success', 'failed')
 - No need for per-component status (files, issue, comments) - overengineering
+
+### Classification Architecture (Milestones 9-14)
+**Decision:** Separate context building from classification logic, use shared LLM client
+**Rationale:**
+- **Context Builder as shared component**: Explorer GUI needs to show "what the LLM sees"
+  - Pure function: PR data in, formatted string out
+  - No dependencies on LLM or database
+  - Can be imported and used independently
+- **LLM Client as dumb wrapper**: Just sends prompts, gets responses
+  - Provider-agnostic: Supports both Claude and OpenAI
+  - No knowledge of PR structure or classification logic
+  - Reusable for other LLM tasks
+- **Classifier as orchestrator**: Combines context + prompt + LLM
+  - No database dependencies - takes PR data, returns classification
+  - Handles retries and parsing errors
+  - Main entry point: `classify_pr(pr_data) -> dict`
+- **Driver in main.py**: Mirrors `fetch` command pattern
+  - Queries database for unclassified PRs
+  - Calls classifier, saves results
+  - Idempotent, resumable, safe to re-run
+- **Prompt as configuration**: Separate file makes iteration easy
+  - No code changes needed to tweak prompt
+  - Can version control prompt iterations
+  - Includes few-shot examples
