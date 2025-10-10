@@ -234,8 +234,7 @@ class GitLabFetcher:
             # Take first 10
             files = files_with_diffs[:10]
             
-            # Truncate each diff to 100 lines and track if any were truncated
-            any_truncated = False
+            # Truncate each diff to 100 lines
             for file in files:
                 original_diff = file["diff"]
                 truncated_diff, was_truncated = self._truncate_diff_with_flag(
@@ -243,9 +242,9 @@ class GitLabFetcher:
                 )
                 file["diff"] = truncated_diff
                 file["diff_truncated"] = was_truncated
-                
-                if was_truncated:
-                    any_truncated = True
+            
+            # Check if file list is truncated (showing fewer files than exist)
+            file_list_truncated = len(files_with_diffs) > len(files)
             
             # Build result with metadata
             result = {
@@ -253,7 +252,7 @@ class GitLabFetcher:
                     "total_files": len(all_diffs),
                     "files_with_diffs": len(files_with_diffs),
                     "files_included": len(files),
-                    "truncated": any_truncated
+                    "truncated": file_list_truncated
                 },
                 "files": files
             }

@@ -238,8 +238,7 @@ class GitHubFetcher:
             # Take first 10
             files = files_with_patches[:10]
             
-            # Truncate each patch to 100 lines and track if any were truncated
-            any_truncated = False
+            # Truncate each patch to 100 lines
             for file in files:
                 original_patch = file["patch"]
                 truncated_patch, was_truncated = self._truncate_patch_with_flag(
@@ -247,9 +246,9 @@ class GitHubFetcher:
                 )
                 file["patch"] = truncated_patch
                 file["patch_truncated"] = was_truncated
-                
-                if was_truncated:
-                    any_truncated = True
+            
+            # Check if file list is truncated (showing fewer files than exist)
+            file_list_truncated = len(files_with_patches) > len(files)
             
             # Build result with metadata
             result = {
@@ -259,7 +258,7 @@ class GitHubFetcher:
                     "files_included": len(files),
                     "total_additions": total_additions,
                     "total_deletions": total_deletions,
-                    "truncated": any_truncated
+                    "truncated": file_list_truncated
                 },
                 "files": files
             }
