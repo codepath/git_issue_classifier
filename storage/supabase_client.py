@@ -212,9 +212,9 @@ class SupabaseClient:
             if platform:
                 filter_desc.append(f"platform={platform}")
             
+            filter_str = f" ({', '.join(filter_desc)})" if filter_desc else ""
             logger.info(
-                f"Found {len(result.data)} items needing enrichment"
-                f"{f' ({', '.join(filter_desc)})' if filter_desc else ''}"
+                f"Found {len(result.data)} items needing enrichment{filter_str}"
             )
             return result.data
             
