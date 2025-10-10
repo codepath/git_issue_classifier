@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Tuple
 from utils.config_loader import load_config
 from utils.logger import setup_logger
@@ -112,17 +113,62 @@ def initialize_fetcher(platform: str, config):
         raise ValueError(f"Unsupported platform: {platform}")
 
 
+def _classify_single_pr(pr_record, classifier, supabase, index, total):
+    """
+    Classify a single PR (helper function for parallel execution).
+    
+    Args:
+        pr_record: PR data from database
+        classifier: Classifier instance
+        supabase: SupabaseClient instance
+        index: Current index (for logging)
+        total: Total number of PRs (for logging)
+    
+    Returns:
+        Tuple of (success: bool, pr_id: str, error: Optional[str])
+    """
+    pr_id = pr_record["id"]
+    pr_repo = pr_record["repo"]
+    pr_number = pr_record["pr_number"]
+    pr_title = pr_record["title"]
+    
+    try:
+        logger.info(f"[{index}/{total}] {pr_repo} PR #{pr_number}: {pr_title}")
+        
+        # Classify the PR
+        classification = classifier.classify_pr(pr_record)
+        
+        # Save classification to database
+        supabase.save_classification(
+            pr_id=pr_id,
+            pr_data=pr_record,
+            classification=classification
+        )
+        
+        logger.info(
+            f"  ✓ Classified as {classification['difficulty']} "
+            f"({', '.join(classification['categories'][:3])})"
+        )
+        
+        return (True, pr_id, None)
+        
+    except Exception as e:
+        logger.error(f"  ✗ Failed to classify: {e}")
+        return (False, pr_id, str(e))
+
+
 def classify_prs(
     repo_full_name: str = None,
     limit: int = 100,
     classifier = None,
-    supabase: SupabaseClient = None
+    supabase: SupabaseClient = None,
+    concurrency: int = 5
 ):
     """
-    Classify enriched PRs using LLM.
+    Classify enriched PRs using LLM with parallel processing.
     
     This queries the database for unclassified PRs, classifies them using
-    the LLM, and saves the results back to the classifications table.
+    the LLM in parallel, and saves the results back to the classifications table.
     
     The process is idempotent - already-classified PRs are skipped automatically.
     
@@ -132,6 +178,7 @@ def classify_prs(
         limit: Maximum number of PRs to classify (default: 100)
         classifier: Classifier instance (optional, will create if not provided)
         supabase: SupabaseClient instance (optional, will create if not provided)
+        concurrency: Number of parallel classification requests (default: 5, max recommended: 10)
     
     Returns:
         bool: True if successful, False otherwise
@@ -184,54 +231,51 @@ def classify_prs(
             stats = supabase.get_classification_stats(repo=repo_full_name)
             logger.info(f"\nClassification stats:")
             logger.info(f"  Total classified: {stats['total_classified']}")
-            logger.info(f"  Trivial: {stats['trivial']}")
-            logger.info(f"  Easy: {stats['easy']}")
-            logger.info(f"  Medium: {stats['medium']}")
-            logger.info(f"  Hard: {stats['hard']}")
+            logger.info(f"  Trivial: {stats['by_difficulty']['trivial']}")
+            logger.info(f"  Easy: {stats['by_difficulty']['easy']}")
+            logger.info(f"  Medium: {stats['by_difficulty']['medium']}")
+            logger.info(f"  Hard: {stats['by_difficulty']['hard']}")
         except Exception as e:
             logger.warning(f"Could not fetch classification stats: {e}")
         
         return True
     
     logger.info(f"Found {len(prs_to_classify)} PRs to classify")
+    logger.info(f"Using {concurrency} concurrent requests")
     logger.info("-" * 80)
     
-    # Classify each PR
+    # Classify PRs in parallel using ThreadPoolExecutor
     classified = 0
     failed = 0
     
-    for i, pr_record in enumerate(prs_to_classify, 1):
-        pr_id = pr_record["id"]
-        pr_repo = pr_record["repo"]
-        pr_number = pr_record["pr_number"]
-        pr_title = pr_record["title"]
-        
-        try:
-            logger.info(f"[{i}/{len(prs_to_classify)}] {pr_repo} PR #{pr_number}: {pr_title}")
-            
-            # Classify the PR
-            classification = classifier.classify_pr(pr_record)
-            
-            # Save classification to database
-            supabase.save_classification(
-                pr_id=pr_id,
-                pr_data=pr_record,
-                classification=classification
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        # Submit all tasks
+        future_to_pr = {}
+        for i, pr_record in enumerate(prs_to_classify, 1):
+            future = executor.submit(
+                _classify_single_pr,
+                pr_record,
+                classifier,
+                supabase,
+                i,
+                len(prs_to_classify)
             )
-            
-            classified += 1
-            logger.info(
-                f"  ✓ Classified as {classification['difficulty']} "
-                f"({', '.join(classification['categories'][:3])})"
-            )
-            
-        except Exception as e:
-            logger.error(f"  ✗ Failed to classify: {e}")
-            failed += 1
+            future_to_pr[future] = pr_record
         
-        # Show progress every 10 PRs
-        if i % 10 == 0 and i < len(prs_to_classify):
-            logger.info(f"  Progress: {i}/{len(prs_to_classify)} PRs processed...")
+        # Process results as they complete
+        completed = 0
+        for future in as_completed(future_to_pr):
+            completed += 1
+            success, pr_id, error = future.result()
+            
+            if success:
+                classified += 1
+            else:
+                failed += 1
+            
+            # Show progress every 10 PRs
+            if completed % 10 == 0 and completed < len(prs_to_classify):
+                logger.info(f"  Progress: {completed}/{len(prs_to_classify)} PRs processed...")
     
     # Summary
     logger.info("\n" + "=" * 80)
@@ -251,10 +295,10 @@ def classify_prs(
         stats = supabase.get_classification_stats(repo=repo_full_name)
         logger.info(f"\nClassification stats:")
         logger.info(f"  Total classified: {stats['total_classified']}")
-        logger.info(f"  Trivial: {stats['trivial']}")
-        logger.info(f"  Easy: {stats['easy']}")
-        logger.info(f"  Medium: {stats['medium']}")
-        logger.info(f"  Hard: {stats['hard']}")
+        logger.info(f"  Trivial: {stats['by_difficulty']['trivial']}")
+        logger.info(f"  Easy: {stats['by_difficulty']['easy']}")
+        logger.info(f"  Medium: {stats['by_difficulty']['medium']}")
+        logger.info(f"  Hard: {stats['by_difficulty']['hard']}")
     except Exception as e:
         logger.warning(f"Could not fetch classification stats: {e}")
     
@@ -649,6 +693,12 @@ Examples:
         default=100,
         help="Maximum number of PRs to classify (default: 100)"
     )
+    classify_parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=5,
+        help="Number of parallel classification requests (default: 5, recommended max: 10)"
+    )
     # Explore command
     explore_parser = subparsers.add_parser(
         "explore",
@@ -790,7 +840,8 @@ Examples:
             repo_full_name=args.repository,
             limit=args.limit,
             classifier=classifier,
-            supabase=supabase
+            supabase=supabase,
+            concurrency=args.concurrency
         )
         
         sys.exit(0 if success else 1)
