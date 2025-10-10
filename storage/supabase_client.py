@@ -60,17 +60,28 @@ class SupabaseClient:
         Raises:
             Exception if insert fails
         """
+        # Get platform and generate repo_url
+        actual_platform = pr_data.get("platform", platform)
+        repo = pr_data["repo"]
+        pr_number = pr_data["pr_number"]
+        
+        if actual_platform == "gitlab":
+            repo_url = f"https://gitlab.com/{repo}/-/merge_requests/{pr_number}"
+        else:  # github
+            repo_url = f"https://github.com/{repo}/pull/{pr_number}"
+        
         # Prepare record with enrichment_status='pending'
         record = {
-            "repo": pr_data["repo"],
-            "pr_number": pr_data["pr_number"],
+            "repo": repo,
+            "pr_number": pr_number,
             "title": pr_data["title"],
             "body": pr_data.get("body"),
             "merged_at": pr_data["merged_at"],
             "created_at": pr_data["created_at"],
             "linked_issue_number": pr_data.get("linked_issue_number"),
             "enrichment_status": "pending",
-            "platform": pr_data.get("platform", platform),  # NEW: Store platform
+            "platform": actual_platform,
+            "repo_url": repo_url,
         }
         
         try:
@@ -114,16 +125,27 @@ class SupabaseClient:
         # Prepare all records
         records = []
         for pr_data in pr_data_list:
+            actual_platform = pr_data.get("platform", platform)
+            repo = pr_data["repo"]
+            pr_number = pr_data["pr_number"]
+            
+            # Generate platform-specific URL
+            if actual_platform == "gitlab":
+                repo_url = f"https://gitlab.com/{repo}/-/merge_requests/{pr_number}"
+            else:  # github
+                repo_url = f"https://github.com/{repo}/pull/{pr_number}"
+            
             records.append({
-                "repo": pr_data["repo"],
-                "pr_number": pr_data["pr_number"],
+                "repo": repo,
+                "pr_number": pr_number,
                 "title": pr_data["title"],
                 "body": pr_data.get("body"),
                 "merged_at": pr_data["merged_at"],
                 "created_at": pr_data["created_at"],
                 "linked_issue_number": pr_data.get("linked_issue_number"),
                 "enrichment_status": "pending",
-                "platform": pr_data.get("platform", platform),  # NEW: Store platform
+                "platform": actual_platform,
+                "repo_url": repo_url,
             })
         
         try:
@@ -359,7 +381,7 @@ class SupabaseClient:
         """
         Query PRs that have been enriched but not yet classified.
         
-        Returns PRs where enrichment_status='success' and no classification exists.
+        Returns PRs where enrichment_status='success' and classified_at IS NULL.
         
         Args:
             limit: Maximum number of PRs to return (default 100)
@@ -371,37 +393,54 @@ class SupabaseClient:
             Returns empty list if no unclassified PRs found
         """
         try:
-            # Build query - get enriched PRs
+            # Build query for enriched PRs that don't have a classification
             query = self.client.table(self.table_name).select("*")
             
             # Filter: only successfully enriched PRs
             query = query.eq("enrichment_status", "success")
             
+            # Filter: not yet classified (classified_at is NULL)
+            query = query.is_("classified_at", "null")
+            
             # Optional: filter by repo
             if repo:
                 query = query.eq("repo", repo)
             
-            # Order by merged_at DESC (newest first) and limit
-            query = query.order("merged_at", desc=True).limit(limit)
+            # Order by merged_at DESC (newest first)
+            query = query.order("merged_at", desc=True)
             
-            # Execute query
-            result = query.execute()
-            prs = result.data
+            # Supabase has a max row limit (default 1000), so we need to paginate
+            # if the requested limit is higher
+            prs = []
+            batch_size = 1000  # Supabase default max
+            offset = 0
             
-            # Filter out PRs that already have classifications
-            # We do this client-side because Supabase doesn't support LEFT JOIN filtering easily
-            unclassified_prs = []
-            for pr in prs:
-                # Check if classification exists for this PR
-                classification_query = self.client.table("classifications").select("id").eq("pr_id", pr["id"]).execute()
-                if not classification_query.data:
-                    unclassified_prs.append(pr)
+            while len(prs) < limit:
+                # How many more do we need?
+                remaining = limit - len(prs)
+                fetch_size = min(remaining, batch_size)
+                
+                # Fetch this batch
+                batch_query = query.limit(fetch_size).offset(offset)
+                result = batch_query.execute()
+                batch = result.data
+                
+                if not batch:
+                    # No more PRs available
+                    break
+                
+                prs.extend(batch)
+                offset += len(batch)
+                
+                # If we got fewer than requested, there are no more PRs
+                if len(batch) < fetch_size:
+                    break
             
             logger.info(
-                f"Found {len(unclassified_prs)} unclassified PRs"
+                f"Found {len(prs)} unclassified PRs"
                 f"{f' in {repo}' if repo else ''}"
             )
-            return unclassified_prs
+            return prs
             
         except Exception as e:
             logger.error(f"Failed to query unclassified PRs: {e}")
@@ -414,48 +453,36 @@ class SupabaseClient:
         classification: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Save classification for a PR to the classifications table.
+        Save classification for a PR by updating the pull_requests table.
         
-        Uses UPSERT for idempotency - safe to call multiple times.
-        The classifications table is denormalized for easy export to Google Sheets.
+        Uses UPDATE with WHERE id = pr_id to add classification data to existing PR.
+        Idempotent - safe to call multiple times (will overwrite previous classification).
         
         Args:
-            pr_id: Database ID of the PR (foreign key)
-            pr_data: PR data dict with keys: repo, pr_number, title, body, merged_at
+            pr_id: Database ID of the PR
+            pr_data: PR data dict (used for logging only)
             classification: Classification dict with keys:
                 - difficulty: str (trivial/easy/medium/hard)
+                - task_clarity: str (clear/partial/poor)
+                - is_reproducible: str (highly likely/maybe/unclear)
+                - onboarding_suitability: str (excellent/poor)
                 - categories: List[str]
                 - concepts_taught: List[str]
                 - prerequisites: List[str]
                 - reasoning: str
         
         Returns:
-            Dict with the inserted/updated classification record
+            Dict with the updated PR record
         
         Raises:
-            Exception if insert fails
+            Exception if update fails
         """
         repo = pr_data["repo"]
         pr_number = pr_data["pr_number"]
-        platform = pr_data.get("platform", "github")  # Default to github for backwards compatibility
         
         try:
-            # Generate platform-specific URL
-            if platform == "gitlab":
-                repo_url = f"https://gitlab.com/{repo}/-/merge_requests/{pr_number}"
-            else:  # github
-                repo_url = f"https://github.com/{repo}/pull/{pr_number}"
-            
-            # Prepare classification record
-            # Denormalized with PR info for standalone export
-            record = {
-                "pr_id": pr_id,
-                "repo_url": repo_url,
-                "repo": repo,
-                "pr_number": pr_number,
-                "title": pr_data["title"],
-                "body": pr_data.get("body"),
-                "merged_at": pr_data["merged_at"],
+            # Prepare classification update
+            update_record = {
                 "difficulty": classification["difficulty"],
                 "task_clarity": classification["task_clarity"],
                 "is_reproducible": classification["is_reproducible"],
@@ -467,17 +494,16 @@ class SupabaseClient:
                 "classified_at": datetime.now(timezone.utc).isoformat(),
             }
             
-            # Upsert to handle re-classification (idempotent)
-            result = self.client.table("classifications").upsert(
-                record,
-                on_conflict="pr_id"
-            ).execute()
+            # Update the PR record with classification data
+            result = self.client.table(self.table_name).update(
+                update_record
+            ).eq("id", pr_id).execute()
             
             logger.info(
                 f"Saved classification for {repo}#{pr_number} "
                 f"(difficulty: {classification['difficulty']})"
             )
-            return result.data[0] if result.data else record
+            return result.data[0] if result.data else update_record
             
         except Exception as e:
             logger.error(
@@ -487,7 +513,7 @@ class SupabaseClient:
     
     def get_classification_stats(self, repo: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get classification statistics.
+        Get classification statistics from pull_requests table.
         
         Useful for monitoring classification progress.
         
@@ -522,53 +548,50 @@ class SupabaseClient:
                 }
             }
             
-            # Build base query
-            query = self.client.table("classifications").select("*", count="exact", head=True)
+            # Fetch all classified PRs (where classified_at is not NULL) in one query
+            # Much more efficient than separate queries!
+            query = self.client.table(self.table_name).select(
+                "difficulty,task_clarity,is_reproducible,onboarding_suitability"
+            ).not_.is_("classified_at", "null")
+            
             if repo:
                 query = query.eq("repo", repo)
             
-            # Total classified
             result = query.execute()
-            stats['total_classified'] = result.count or 0
+            classifications = result.data
             
-            # Count by difficulty
-            for difficulty in ['trivial', 'easy', 'medium', 'hard']:
-                query = self.client.table("classifications").select("*", count="exact", head=True)
-                if repo:
-                    query = query.eq("repo", repo)
-                query = query.eq("difficulty", difficulty)
-                result = query.execute()
-                stats['by_difficulty'][difficulty] = result.count or 0
+            stats['total_classified'] = len(classifications)
             
-            # Count by task clarity
-            for clarity in ['clear', 'partial', 'poor']:
-                query = self.client.table("classifications").select("*", count="exact", head=True)
-                if repo:
-                    query = query.eq("repo", repo)
-                query = query.eq("task_clarity", clarity)
-                result = query.execute()
-                stats['by_task_clarity'][clarity] = result.count or 0
-            
-            # Count by reproducibility
-            for reproducible in ['highly likely', 'maybe', 'unclear']:
-                query = self.client.table("classifications").select("*", count="exact", head=True)
-                if repo:
-                    query = query.eq("repo", repo)
-                query = query.eq("is_reproducible", reproducible)
-                result = query.execute()
-                stats['by_reproducible'][reproducible] = result.count or 0
-            
-            # Count by onboarding suitability
-            for suitability in ['excellent', 'poor']:
-                query = self.client.table("classifications").select("*", count="exact", head=True)
-                if repo:
-                    query = query.eq("repo", repo)
-                query = query.eq("onboarding_suitability", suitability)
-                result = query.execute()
-                stats['by_onboarding'][suitability] = result.count or 0
+            # Count by each field in Python (faster than separate queries)
+            for c in classifications:
+                # Count by difficulty
+                difficulty = c.get('difficulty')
+                if difficulty in stats['by_difficulty']:
+                    stats['by_difficulty'][difficulty] += 1
+                
+                # Count by task clarity
+                clarity = c.get('task_clarity')
+                if clarity in stats['by_task_clarity']:
+                    stats['by_task_clarity'][clarity] += 1
+                
+                # Count by reproducibility
+                reproducible = c.get('is_reproducible')
+                if reproducible in stats['by_reproducible']:
+                    stats['by_reproducible'][reproducible] += 1
+                
+                # Count by onboarding suitability
+                onboarding = c.get('onboarding_suitability')
+                if onboarding in stats['by_onboarding']:
+                    stats['by_onboarding'][onboarding] += 1
             
             return stats
             
         except Exception as e:
             logger.error(f"Failed to get classification stats: {e}")
-            return {'total_classified': 0, 'trivial': 0, 'easy': 0, 'medium': 0, 'hard': 0}
+            return {
+                'total_classified': 0,
+                'by_difficulty': {'trivial': 0, 'easy': 0, 'medium': 0, 'hard': 0},
+                'by_task_clarity': {'clear': 0, 'partial': 0, 'poor': 0},
+                'by_reproducible': {'highly likely': 0, 'maybe': 0, 'unclear': 0},
+                'by_onboarding': {'excellent': 0, 'poor': 0}
+            }

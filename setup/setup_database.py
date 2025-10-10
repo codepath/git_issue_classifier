@@ -44,7 +44,11 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     merged_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL,
     linked_issue_number INTEGER,  -- Phase 1 hint: parsed from description
-    platform TEXT NOT NULL DEFAULT 'github',  -- NEW: 'github' or 'gitlab'
+    platform TEXT NOT NULL DEFAULT 'github',  -- 'github' or 'gitlab'
+    repo_url TEXT,  -- Generated on insert: platform-specific URL
+    
+    -- Favorites (for onboarding workflow curation)
+    is_favorite BOOLEAN DEFAULT FALSE,
     
     -- Enriched Data (from enrichment phase - Phase 2) - NULLABLE
     files JSONB,
@@ -56,28 +60,7 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     enrichment_attempted_at TIMESTAMP,
     enrichment_error TEXT,
     
-    -- Constraints
-    UNIQUE(repo, pr_number)
-);
-"""
-
-CREATE_CLASSIFICATIONS_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS classifications (
-    -- Primary Key
-    id BIGSERIAL PRIMARY KEY,
-    
-    -- Foreign Key (for joins if needed)
-    pr_id BIGINT REFERENCES pull_requests(id) ON DELETE CASCADE,
-    
-    -- Denormalized PR info (for standalone export)
-    repo_url TEXT NOT NULL,
-    repo TEXT NOT NULL,
-    pr_number INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    body TEXT,
-    merged_at TIMESTAMP NOT NULL,
-    
-    -- Classification fields
+    -- Classification Data (from classification phase - Phase 3) - NULLABLE
     difficulty TEXT CHECK (difficulty IN ('trivial', 'easy', 'medium', 'hard')),
     task_clarity TEXT CHECK (task_clarity IN ('clear', 'partial', 'poor')),
     is_reproducible TEXT CHECK (is_reproducible IN ('highly likely', 'maybe', 'unclear')),
@@ -86,12 +69,10 @@ CREATE TABLE IF NOT EXISTS classifications (
     concepts_taught TEXT[],
     prerequisites TEXT[],
     reasoning TEXT,
-    
-    -- Metadata
-    classified_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    classified_at TIMESTAMP,
     
     -- Constraints
-    UNIQUE(pr_id)
+    UNIQUE(repo, pr_number)
 );
 """
 
@@ -99,16 +80,16 @@ CREATE_INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_enrichment_status ON pull_requests(enrichment_status);",
     "CREATE INDEX IF NOT EXISTS idx_repo ON pull_requests(repo);",
     "CREATE INDEX IF NOT EXISTS idx_merged_at ON pull_requests(merged_at DESC);",
-    "CREATE INDEX IF NOT EXISTS idx_platform ON pull_requests(platform);",  # NEW: For platform filtering
-    "CREATE INDEX IF NOT EXISTS idx_classifications_difficulty ON classifications(difficulty);",
-    "CREATE INDEX IF NOT EXISTS idx_classifications_task_clarity ON classifications(task_clarity);",
-    "CREATE INDEX IF NOT EXISTS idx_classifications_reproducible ON classifications(is_reproducible);",
-    "CREATE INDEX IF NOT EXISTS idx_classifications_onboarding ON classifications(onboarding_suitability);",
-    "CREATE INDEX IF NOT EXISTS idx_classifications_repo ON classifications(repo);",
-    "CREATE INDEX IF NOT EXISTS idx_classifications_merged_at ON classifications(merged_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_platform ON pull_requests(platform);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_favorite ON pull_requests(is_favorite);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_difficulty ON pull_requests(difficulty);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_task_clarity ON pull_requests(task_clarity);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_is_reproducible ON pull_requests(is_reproducible);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_onboarding_suitability ON pull_requests(onboarding_suitability);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_repo_url ON pull_requests(repo_url);",
 ]
 
-DROP_TABLE_SQL = "DROP TABLE IF EXISTS classifications CASCADE; DROP TABLE IF EXISTS pull_requests CASCADE;"
+DROP_TABLE_SQL = "DROP TABLE IF EXISTS pull_requests CASCADE;"
 
 
 def get_database_url(config) -> str:
@@ -183,22 +164,6 @@ def verify_schema(conn) -> bool:
         
         logger.info("✓ Table 'pull_requests' exists")
         
-        # Check if classifications table exists
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = 'classifications'
-            );
-        """)
-        classifications_exists = cursor.fetchone()[0]
-        
-        if not classifications_exists:
-            logger.error("✗ Table 'classifications' does not exist")
-            cursor.close()
-            return False
-        
-        logger.info("✓ Table 'classifications' exists")
-        
         # Check pull_requests indexes
         cursor.execute("""
             SELECT indexname 
@@ -207,22 +172,11 @@ def verify_schema(conn) -> bool:
         """)
         indexes = [row[0] for row in cursor.fetchall()]
         
-        expected_indexes = ['idx_enrichment_status', 'idx_repo', 'idx_merged_at', 'idx_platform']
-        for idx in expected_indexes:
-            if idx in indexes:
-                logger.info(f"✓ Index '{idx}' exists")
-            else:
-                logger.warning(f"⚠ Index '{idx}' missing")
-        
-        # Check classifications indexes
-        cursor.execute("""
-            SELECT indexname 
-            FROM pg_indexes 
-            WHERE tablename = 'classifications';
-        """)
-        indexes = [row[0] for row in cursor.fetchall()]
-        
-        expected_indexes = ['idx_classifications_difficulty', 'idx_classifications_task_clarity', 'idx_classifications_reproducible', 'idx_classifications_onboarding', 'idx_classifications_repo', 'idx_classifications_merged_at']
+        expected_indexes = [
+            'idx_enrichment_status', 'idx_repo', 'idx_merged_at', 'idx_platform', 
+            'idx_pr_favorite', 'idx_pr_difficulty', 'idx_pr_task_clarity',
+            'idx_pr_is_reproducible', 'idx_pr_onboarding_suitability', 'idx_pr_repo_url'
+        ]
         for idx in expected_indexes:
             if idx in indexes:
                 logger.info(f"✓ Index '{idx}' exists")
@@ -247,10 +201,6 @@ def create_schema(conn) -> bool:
     if not execute_sql(conn, CREATE_TABLE_SQL, "Created table 'pull_requests'"):
         return False
     
-    # Create classifications table
-    if not execute_sql(conn, CREATE_CLASSIFICATIONS_TABLE_SQL, "Created table 'classifications'"):
-        return False
-    
     # Create indexes
     for idx_sql in CREATE_INDEXES_SQL:
         idx_name = idx_sql.split("INDEX IF NOT EXISTS ")[1].split(" ON")[0]
@@ -266,14 +216,14 @@ def drop_schema(conn) -> bool:
     logger.warning("\n" + "="*80)
     logger.warning("⚠️  WARNING: DROPPING EXISTING SCHEMA")
     logger.warning("="*80)
-    logger.warning("This will DELETE ALL DATA in both pull_requests and classifications tables!")
+    logger.warning("This will DELETE ALL DATA in the pull_requests table!")
     
     response = input("\nType 'yes' to confirm: ")
     if response.lower() != 'yes':
         logger.info("Aborted.")
         return False
     
-    if not execute_sql(conn, DROP_TABLE_SQL, "Dropped tables 'pull_requests' and 'classifications'"):
+    if not execute_sql(conn, DROP_TABLE_SQL, "Dropped table 'pull_requests'"):
         return False
     
     logger.info("✓ Schema dropped")
