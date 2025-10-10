@@ -125,6 +125,39 @@ function PRList() {
           </p>
         </div>
 
+        {/* How to Use Section */}
+        <div className="bg-gray-50 border border-gray-300 rounded-lg p-4 mb-4 max-w-3xl">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">
+            How to Use This Tool
+          </h2>
+          
+          <p className="text-sm text-gray-700 mb-3 leading-relaxed">
+            The purpose of this tool is to help you select onboarding issues for a repository hosted on GitHub or GitLab. 
+            A group of developers are joining the project, and they'll familiarize themselves with the project by implementing 
+            past merged pull requests.
+          </p>
+
+          <ul className="text-sm text-gray-700 mb-3 space-y-1.5 ml-4">
+            <li className="flex gap-2">
+              <span className="text-gray-600 font-bold">•</span>
+              <span>Onboarding developers will use a fork of the project that has been rewound in time (e.g., 3-6 months).</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-gray-600 font-bold">•</span>
+              <span>Onboarding developers will choose a selection of easy, medium, and hard issues to tackle.</span>
+            </li>
+          </ul>
+
+          <div className="text-sm text-gray-700">
+            <p className="font-medium mb-2">To use this tool, follow the steps below:</p>
+            <ol className="space-y-1.5 ml-5 list-decimal">
+              <li>Choose your repository and past date.</li>
+              <li>Start exploring past pull requests, which have been categorized by AI as a good onboarding issue, and assigned a difficulty level.</li>
+              <li>When you find an issue that you like, favorite it.</li>
+            </ol>
+          </div>
+        </div>
+
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-3 mb-4">
           {/* Row 1: Repository Filter */}
@@ -345,7 +378,7 @@ function PRList() {
                         <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium text-blue-600">
                           #{pr.pr_number}
                         </td>
-                        <td className="px-4 py-2.5 text-sm text-gray-900 max-w-lg truncate">
+                        <td className="px-4 py-2.5 text-sm text-gray-900 max-w-md truncate">
                           {pr.title}
                         </td>
                         <td className="px-4 py-2.5 whitespace-nowrap">
