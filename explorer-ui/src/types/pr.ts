@@ -1,12 +1,14 @@
 export interface PullRequest {
   id: number;
   repo: string;
+  repo_url: string;
   pr_number: number;
   title: string;
   body: string | null;
   merged_at: string;
   created_at: string;
   linked_issue_number: number | null;
+  platform: string;
   files: {
     files: Array<{
       filename: string;
@@ -40,6 +42,19 @@ export interface PullRequest {
   enrichment_status: string;
   enrichment_attempted_at: string | null;
   enrichment_error: string | null;
+  
+  // Classification fields (nullable until classified)
+  difficulty?: string | null;
+  task_clarity?: string | null;
+  is_reproducible?: string | null;
+  onboarding_suitability?: string | null;
+  categories?: string[] | null;
+  concepts_taught?: string[] | null;
+  prerequisites?: string[] | null;
+  reasoning?: string | null;
+  classified_at?: string | null;
+  
+  llm_payload?: string | null;
 }
 
 export interface PRListResponse {

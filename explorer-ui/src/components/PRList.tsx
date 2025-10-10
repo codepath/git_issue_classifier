@@ -3,12 +3,28 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { fetchPRs, fetchRepos } from "@/lib/api";
 import type { PullRequest } from "@/types/pr";
+import { Badge } from "@/components/ui/badge";
+
+// Helper function to calculate date N months ago
+function getDateMonthsAgo(months: number): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() - months);
+  return date.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+}
 
 function PRList() {
   const navigate = useNavigate();
   const [selectedRepo, setSelectedRepo] = useState<string>("");
   const [page, setPage] = useState(1);
   const perPage = 50;
+  
+  // Date cutoff and sort order state
+  const [cutoffDate, setCutoffDate] = useState<string>(getDateMonthsAgo(3)); // Default: 3 months ago
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc"); // Default: oldest first (chronological)
+  
+  // Classification filter state
+  const [onboardingSuitability, setOnboardingSuitability] = useState<string>("");
+  const [difficulty, setDifficulty] = useState<string>("");
 
   // Fetch repositories for filter dropdown
   const { data: reposData } = useQuery({
@@ -18,8 +34,18 @@ function PRList() {
 
   // Fetch PRs with pagination and filtering
   const { data, isLoading, error } = useQuery({
-    queryKey: ["prs", selectedRepo, page],
-    queryFn: () => fetchPRs(selectedRepo || undefined, page, perPage),
+    queryKey: ["prs", selectedRepo, page, cutoffDate, sortOrder, onboardingSuitability, difficulty],
+    queryFn: () => fetchPRs(
+      selectedRepo || undefined, 
+      page, 
+      perPage, 
+      cutoffDate, 
+      sortOrder,
+      onboardingSuitability || undefined,
+      difficulty || undefined,
+      undefined, // taskClarity - not used
+      undefined  // isReproducible - not used
+    ),
   });
 
   const handleRowClick = (pr: PullRequest) => {
@@ -46,7 +72,8 @@ function PRList() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="flex gap-4 items-center">
+          {/* Row 1: Repository Filter */}
+          <div className="flex gap-4 items-center mb-4">
             <label className="text-sm font-medium text-gray-700">
               Repository:
             </label>
@@ -65,6 +92,104 @@ function PRList() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Row 2: Date and Sort Controls */}
+          <div className="flex gap-6 items-center flex-wrap">
+            {/* Date Picker */}
+            <div className="flex gap-2 items-center">
+              <label className="text-sm font-medium text-gray-700">
+                Show PRs merged after:
+              </label>
+              <input
+                type="date"
+                value={cutoffDate}
+                onChange={(e) => {
+                  setCutoffDate(e.target.value);
+                  setPage(1); // Reset to first page when filter changes
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Sort Order */}
+            <div className="flex gap-2 items-center">
+              <label className="text-sm font-medium text-gray-700">
+                Sort order:
+              </label>
+              <select
+                value={sortOrder}
+                onChange={(e) => {
+                  setSortOrder(e.target.value as "asc" | "desc");
+                  setPage(1); // Reset to first page when sort changes
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="asc">Oldest First (Chronological)</option>
+                <option value="desc">Newest First</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Row 3: Classification Filters */}
+          <div className="flex gap-6 items-center flex-wrap mt-4 pt-4 border-t">
+            <div className="text-sm font-medium text-gray-700 mr-2">
+              Classification Filters:
+            </div>
+
+            {/* Onboarding Suitability */}
+            <div className="flex gap-2 items-center">
+              <label className="text-sm text-gray-600">
+                Onboarding Suitability: 
+              </label>
+              <select
+                value={onboardingSuitability}
+                onChange={(e) => {
+                  setOnboardingSuitability(e.target.value);
+                  setPage(1);
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">All</option>
+                <option value="excellent">Excellent</option>
+                <option value="poor">Poor</option>
+              </select>
+            </div>
+
+            {/* Difficulty */}
+            <div className="flex gap-2 items-center">
+              <label className="text-sm text-gray-600">
+                Difficulty:
+              </label>
+              <select
+                value={difficulty}
+                onChange={(e) => {
+                  setDifficulty(e.target.value);
+                  setPage(1);
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">All</option>
+                <option value="trivial">Trivial</option>
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+
+            {/* Clear Filters Button */}
+            {(onboardingSuitability || difficulty) && (
+              <button
+                onClick={() => {
+                  setOnboardingSuitability("");
+                  setDifficulty("");
+                  setPage(1);
+                }}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+              >
+                Clear All Filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -102,10 +227,13 @@ function PRList() {
                       Title
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Merged Date
+                      Suitability
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Difficulty
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Merged Date
                     </th>
                   </tr>
                 </thead>
@@ -113,7 +241,7 @@ function PRList() {
                   {data.prs.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-6 py-8 text-center text-gray-500"
                       >
                         No PRs found
@@ -135,21 +263,32 @@ function PRList() {
                         <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
                           {pr.title}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {pr.onboarding_suitability ? (
+                            <Badge 
+                              variant={
+                                pr.onboarding_suitability === "excellent" 
+                                  ? "excellent" 
+                                  : "poor"
+                              }
+                            >
+                              {pr.onboarding_suitability}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-gray-400">N/A</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {pr.difficulty ? (
+                            <Badge variant="secondary">
+                              {pr.difficulty}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-gray-400">N/A</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(pr.merged_at).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              pr.enrichment_status === "success"
-                                ? "bg-green-100 text-green-800"
-                                : pr.enrichment_status === "pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {pr.enrichment_status}
-                          </span>
                         </td>
                       </tr>
                     ))
