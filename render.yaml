@@ -7,7 +7,7 @@ services:
   - type: web
     name: git-issue-classifier-api
     runtime: python
-    plan: free  # Change to 'starter' for production ($7/month)
+    plan: starter  # Starter plan - no cold starts, always available
     region: oregon  # Choose closest to your users: oregon, frankfurt, singapore, ohio
     buildCommand: pip install uv && uv sync --frozen
     startCommand: uv run uvicorn backend.app:app --host 0.0.0.0 --port $PORT
@@ -36,7 +36,7 @@ services:
   - type: web
     name: git-issue-classifier-frontend
     runtime: static
-    plan: free
+    plan: starter  # Static sites are free but keeping consistent with backend
     region: oregon  # Should match backend region
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist

@@ -106,26 +106,20 @@ Before going live, verify:
 - [ ] Frontend loads and can fetch data from backend
 - [ ] CORS is working (no console errors)
 - [ ] Database connection is stable
-- [ ] Free tier limits are acceptable:
-  - 750 hours/month per service
-  - Services spin down after 15 min of inactivity (causes ~10s cold starts)
+- [ ] Services are on Starter plan (no cold starts, always available)
 
-## Upgrading to Paid Tier
+## Professional Plan Benefits
 
-Free tier limitations:
-- **Cold Starts**: Services spin down after inactivity (~10-30 second startup delay)
-- **Limited Resources**: 512 MB RAM, 0.1 CPU
-- **Shared IP**: Can't use custom domains without paid plan
+Since you're on the Professional plan, you get:
 
-To upgrade (recommended for production):
+- ✅ **No cold starts**: Services are always running (instant response)
+- ✅ **More resources**: Better CPU and memory allocation
+- ✅ **Custom domains**: Free SSL certificates included
+- ✅ **Priority support**: Faster response times
+- ✅ **Better performance**: Higher request limits and faster builds
+- ✅ **Team collaboration**: Multiple team members can access the dashboard
 
-1. Go to service → **Settings** → **Plan**
-2. Upgrade to **Starter** ($7/month per service = $14/month total)
-3. Benefits:
-   - No cold starts (always running)
-   - More resources (512 MB RAM, 0.5 CPU)
-   - Custom domains
-   - Priority support
+Your services are configured with the **Starter** instance type which is included in your plan.
 
 ## Using Custom Domains
 
@@ -155,11 +149,11 @@ Common issues:
 - `API fetch failed`: Check that `VITE_API_URL` is set correctly and backend is running
 - `404 errors`: Verify routes are configured (should be automatic in `render.yaml`)
 
-### Cold starts are slow (Free tier)
+### Cold starts (if any)
 
-This is expected behavior on free tier. To fix:
-- Upgrade to Starter plan ($7/month per service)
-- Or accept 10-30s startup delay after 15 min of inactivity
+With your Professional plan and Starter instances, you shouldn't experience cold starts. If you do:
+- Verify the service is on "Starter" plan (not "Free")
+- Check Settings → Instance Type
 
 ### Environment variable changes not taking effect
 
@@ -175,17 +169,14 @@ To apply changes:
 - **Metrics**: Dashboard → Service → Metrics (CPU, RAM, requests)
 - **Health Checks**: Backend has automatic health check at `/api/repos`
 
-## Cost Estimate
+## Cost Estimate (Professional Plan)
 
-**Free Tier** (adequate for testing):
-- Backend: Free (750 hrs/month, cold starts)
-- Frontend: Free (100 GB bandwidth/month)
-- **Total: $0/month**
+With your Professional plan subscription:
+- Backend: Starter instance (included in plan)
+- Frontend: Static site (free)
+- **Total: Covered by your Professional plan subscription**
 
-**Production** (recommended for real use):
-- Backend: Starter ($7/month)
-- Frontend: Free (static sites are always free!)
-- **Total: $7/month**
+Note: Your Professional plan includes multiple services, so you can deploy both backend and frontend without additional per-service charges.
 
 ## Environment Variable Reference
 
