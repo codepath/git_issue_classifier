@@ -1,6 +1,10 @@
 import type { PullRequest, PRListResponse, ReposResponse } from "@/types/pr";
 
-const API_BASE_URL = "/api";
+// In production, VITE_API_URL will be set by Render
+// In development, it falls back to the local API proxy
+const API_BASE_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : "/api";
 
 export interface PRFilters {
   repo?: string;
