@@ -36,8 +36,6 @@ services:
   - type: web
     name: git-issue-classifier-frontend
     runtime: static
-    plan: starter  # Static sites are free but keeping consistent with backend
-    region: oregon  # Should match backend region
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
     routes:
