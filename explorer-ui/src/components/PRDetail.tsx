@@ -1,6 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPR } from "@/lib/api";
+import ClassificationCard from "./ClassificationCard";
+import LLMPayloadCard from "./LLMPayloadCard";
 
 function PRDetail() {
   const { owner, repo, number } = useParams<{
@@ -74,7 +76,14 @@ function PRDetail() {
               <div className="flex items-center gap-3 text-sm text-gray-600">
                 <span className="font-medium">{pr.repo}</span>
                 <span>•</span>
-                <span className="font-mono text-blue-600">#{pr.pr_number}</span>
+                <a
+                  href={pr.repo_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  #{pr.pr_number}
+                </a>
                 <span>•</span>
                 <span
                   className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -126,6 +135,12 @@ function PRDetail() {
           </div>
         </div>
 
+        {/* Classification */}
+        <ClassificationCard pr={pr} />
+
+        {/* LLM Payload */}
+        <LLMPayloadCard llmPayload={pr.llm_payload} isLoading={isLoading} />
+
         {/* PR Body */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-3">Description</h2>
@@ -144,9 +159,18 @@ function PRDetail() {
             <h2 className="text-lg font-bold text-gray-900 mb-3">Linked Issue</h2>
             <div className="border border-gray-200 rounded-md p-4">
               <div className="flex items-center gap-2 mb-2">
-                <span className="font-mono text-sm text-blue-600">
+                <a
+                  href={
+                    pr.platform === "gitlab"
+                      ? `https://gitlab.com/${pr.repo}/-/issues/${pr.linked_issue.number}`
+                      : `https://github.com/${pr.repo}/issues/${pr.linked_issue.number}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
                   #{pr.linked_issue.number}
-                </span>
+                </a>
                 <span className="font-medium text-gray-900">
                   {pr.linked_issue.title}
                 </span>
