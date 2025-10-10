@@ -1,0 +1,233 @@
+# Deployment Guide - Render
+
+This guide walks you through deploying the Git Issue Classifier to Render using the `render.yaml` blueprint.
+
+## Prerequisites
+
+1. **Render Account**: Sign up at [render.com](https://render.com)
+2. **GitHub Repository**: Your code must be pushed to GitHub
+3. **Environment Variables**: Have your credentials ready (Supabase, API keys, etc.)
+
+## Quick Deploy (Recommended)
+
+### Step 1: Push to GitHub
+
+```bash
+git add .
+git commit -m "Add Render deployment configuration"
+git push origin main
+```
+
+### Step 2: Create New Blueprint in Render
+
+1. Go to [Render Dashboard](https://dashboard.render.com)
+2. Click **"New +"** → **"Blueprint"**
+3. Connect your GitHub repository
+4. Render will automatically detect `render.yaml`
+5. Click **"Apply"**
+
+### Step 3: Configure Environment Variables
+
+Render will create both services but they'll need environment variables. For each service:
+
+#### Backend API Environment Variables
+
+Go to your backend service → **Environment** tab and add:
+
+**Required:**
+```bash
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:[PORT]/postgres
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-3-5-sonnet-20241022
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Optional (only if using fetch commands):**
+```bash
+GITHUB_TOKEN=ghp_...
+GITLAB_TOKEN=glpat-...
+OPENAI_API_KEY=sk-...  # If using OpenAI instead of Anthropic
+```
+
+#### Frontend Environment Variables
+
+After the backend is deployed, get its URL (e.g., `https://git-issue-classifier-api.onrender.com`)
+
+Go to your frontend service → **Environment** tab and update:
+
+```bash
+VITE_API_URL=https://git-issue-classifier-api.onrender.com
+```
+
+**Important:** After updating `VITE_API_URL`, you must **manually redeploy** the frontend for the change to take effect (click "Manual Deploy" → "Clear build cache & deploy").
+
+### Step 4: Verify Deployment
+
+1. **Backend**: Visit `https://your-backend.onrender.com/api/repos`
+   - Should return `{"repos": [...]}`
+   
+2. **Frontend**: Visit `https://your-frontend.onrender.com`
+   - Should load the React app and fetch PRs from backend
+
+## Manual Deploy (Alternative)
+
+If you prefer to create services manually instead of using the Blueprint:
+
+### Backend Service
+
+1. **New Web Service**
+2. **Connect Repository**
+3. **Configure:**
+   - Name: `git-issue-classifier-api`
+   - Runtime: `Python 3`
+   - Build Command: `pip install uv && uv sync --frozen`
+   - Start Command: `uv run uvicorn backend.app:app --host 0.0.0.0 --port $PORT`
+   - Plan: Free (or Starter for production)
+4. **Add Environment Variables** (see above)
+
+### Frontend Service
+
+1. **New Static Site**
+2. **Connect Repository**
+3. **Configure:**
+   - Name: `git-issue-classifier-frontend`
+   - Build Command: `cd frontend && npm install && npm run build`
+   - Publish Directory: `frontend/dist`
+   - Add environment variable: `VITE_API_URL=<your-backend-url>`
+
+## Production Checklist
+
+Before going live, verify:
+
+- [ ] All environment variables are set correctly
+- [ ] Backend `/api/repos` endpoint returns data
+- [ ] Frontend loads and can fetch data from backend
+- [ ] CORS is working (no console errors)
+- [ ] Database connection is stable
+- [ ] Free tier limits are acceptable:
+  - 750 hours/month per service
+  - Services spin down after 15 min of inactivity (causes ~10s cold starts)
+
+## Upgrading to Paid Tier
+
+Free tier limitations:
+- **Cold Starts**: Services spin down after inactivity (~10-30 second startup delay)
+- **Limited Resources**: 512 MB RAM, 0.1 CPU
+- **Shared IP**: Can't use custom domains without paid plan
+
+To upgrade (recommended for production):
+
+1. Go to service → **Settings** → **Plan**
+2. Upgrade to **Starter** ($7/month per service = $14/month total)
+3. Benefits:
+   - No cold starts (always running)
+   - More resources (512 MB RAM, 0.5 CPU)
+   - Custom domains
+   - Priority support
+
+## Using Custom Domains
+
+After upgrading to paid plan:
+
+1. Go to service → **Settings** → **Custom Domain**
+2. Add your domain (e.g., `api.yourdomain.com` for backend)
+3. Update frontend `VITE_API_URL` to use custom domain
+4. Redeploy frontend
+
+## Troubleshooting
+
+### Backend won't start
+
+**Check logs:** Dashboard → Service → Logs
+
+Common issues:
+- Missing environment variables (check `SUPABASE_URL`, `SUPABASE_KEY`, etc.)
+- Database connection failed (verify `DATABASE_URL`)
+- `uv sync` failed (check `pyproject.toml` and `uv.lock` are committed)
+
+### Frontend shows blank page
+
+**Check browser console** for errors:
+
+- `CORS error`: Backend CORS is already set to allow all origins, this shouldn't happen
+- `API fetch failed`: Check that `VITE_API_URL` is set correctly and backend is running
+- `404 errors`: Verify routes are configured (should be automatic in `render.yaml`)
+
+### Cold starts are slow (Free tier)
+
+This is expected behavior on free tier. To fix:
+- Upgrade to Starter plan ($7/month per service)
+- Or accept 10-30s startup delay after 15 min of inactivity
+
+### Environment variable changes not taking effect
+
+Frontend environment variables (`VITE_*`) are **baked into the build** at build time.
+
+To apply changes:
+1. Update environment variable in Render Dashboard
+2. Click **Manual Deploy** → **Clear build cache & deploy**
+
+## Monitoring & Logs
+
+- **Logs**: Dashboard → Service → Logs (real-time)
+- **Metrics**: Dashboard → Service → Metrics (CPU, RAM, requests)
+- **Health Checks**: Backend has automatic health check at `/api/repos`
+
+## Cost Estimate
+
+**Free Tier** (adequate for testing):
+- Backend: Free (750 hrs/month, cold starts)
+- Frontend: Free (100 GB bandwidth/month)
+- **Total: $0/month**
+
+**Production** (recommended for real use):
+- Backend: Starter ($7/month)
+- Frontend: Free (static sites are always free!)
+- **Total: $7/month**
+
+## Environment Variable Reference
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `SUPABASE_URL` | ✅ | Your Supabase project URL | `https://xxx.supabase.co` |
+| `SUPABASE_KEY` | ✅ | Supabase anon/public key | `eyJhbG...` |
+| `DATABASE_URL` | ✅ | Direct Postgres connection | `postgresql://postgres:...` |
+| `LLM_PROVIDER` | ✅ | LLM provider to use | `anthropic` or `openai` |
+| `LLM_MODEL` | ✅ | Model name | `claude-3-5-sonnet-20241022` |
+| `ANTHROPIC_API_KEY` | ✅* | Anthropic API key | `sk-ant-...` |
+| `OPENAI_API_KEY` | ⚠️ | OpenAI API key (if using OpenAI) | `sk-...` |
+| `GITHUB_TOKEN` | ⚠️ | GitHub PAT (only for fetch command) | `ghp_...` |
+| `GITLAB_TOKEN` | ⚠️ | GitLab PAT (only for fetch command) | `glpat-...` |
+| `VITE_API_URL` | ✅ | Backend API URL (frontend only) | `https://your-api.onrender.com` |
+
+✅ = Required  
+⚠️ = Optional (depends on usage)  
+✅* = Required if using Anthropic
+
+## Next Steps
+
+After successful deployment:
+
+1. **Test the API**: Use the Swagger docs at `https://your-backend.onrender.com/docs`
+2. **Fetch PRs**: SSH into your backend or use Render Shell to run:
+   ```bash
+   uv run python main.py fetch facebook/react --limit 100
+   ```
+3. **Classify PRs**: 
+   ```bash
+   uv run python main.py classify facebook/react --limit 50
+   ```
+4. **Browse in UI**: Open your frontend URL and explore!
+
+## Support
+
+- **Render Docs**: https://render.com/docs
+- **Render Community**: https://community.render.com
+- **This Project**: [Open an issue on GitHub]
+
+---
+
+**Deployment created with `render.yaml` blueprint** ✨
+

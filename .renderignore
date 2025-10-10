@@ -1,0 +1,47 @@
+# Render ignore file - exclude from deployment
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments (not needed with uv)
+venv/
+env/
+ENV/
+
+# Tests
+tests/
+*.test.ts
+*.test.tsx
+
+# Development files
+.env
+.env.local
+.env.example
+.git/
+.gitignore
+memory/
+*.md
+!DEPLOY.md
+!README.md
+
+# Frontend node_modules (built separately)
+frontend/node_modules/
+
+# Frontend source (only dist/ is needed)
+# Note: Keep source for now since Render builds it
+# frontend/src/
+
+# Misc
+.DS_Store
+.cursor/
+.vscode/
+*.log
+

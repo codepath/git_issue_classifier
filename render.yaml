@@ -1,0 +1,54 @@
+# Render Blueprint - Infrastructure as Code
+# This file defines your entire deployment configuration
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # Backend API (FastAPI + Python)
+  - type: web
+    name: git-issue-classifier-api
+    runtime: python
+    plan: free  # Change to 'starter' for production ($7/month)
+    region: oregon  # Choose closest to your users: oregon, frankfurt, singapore, ohio
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/repos
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SUPABASE_URL
+        sync: false  # Set manually in Render Dashboard
+      - key: SUPABASE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: LLM_PROVIDER
+        value: anthropic  # or openai
+      - key: LLM_MODEL
+        value: claude-3-5-sonnet-20241022
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false  # Optional - only needed if fetching from GitHub
+      - key: GITLAB_TOKEN
+        sync: false  # Optional - only needed if fetching from GitLab
+    
+  # Frontend (React + Vite)
+  - type: web
+    name: git-issue-classifier-frontend
+    runtime: static
+    plan: free
+    region: oregon  # Should match backend region
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html  # SPA fallback for React Router
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Vite uses VITE_ prefix for env vars
+      # Backend API URL will be injected at build time
+      - key: VITE_API_URL
+        value: https://git-issue-classifier-api.onrender.com  # Update with your backend URL after first deploy
+
