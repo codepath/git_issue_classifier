@@ -86,12 +86,14 @@ class Classifier:
         full_prompt = CLASSIFICATION_PROMPT.format(pr_context=pr_context)
         
         # Step 3: Call LLM with retry logic
+        response_text = None
         for attempt in range(1, self.max_retries + 2):  # +2 because first attempt + max_retries
             try:
                 logger.debug(f"LLM call attempt {attempt}/{self.max_retries + 1}")
                 
-                # Send prompt to LLM
-                response_text = self.llm_client.send_prompt(full_prompt)
+                # Send prompt to LLM (only if we don't have a response from a fix attempt)
+                if response_text is None:
+                    response_text = self.llm_client.send_prompt(full_prompt)
                 
                 # Step 4: Parse JSON response
                 classification = self._parse_classification_response(response_text)
@@ -111,8 +113,14 @@ class Classifier:
                     f"Failed to parse JSON response (attempt {attempt}): {e}"
                 )
                 if attempt <= self.max_retries:
-                    logger.info(f"Retrying in {self.retry_delay}s...")
-                    time.sleep(self.retry_delay)
+                    # Ask the LLM to fix the malformed JSON
+                    logger.info("Asking LLM to fix malformed JSON...")
+                    fix_prompt = (
+                        f"The following JSON is malformed. Please return a corrected, "
+                        f"properly formatted JSON object with the same content:\n\n{response_text}"
+                    )
+                    response_text = self.llm_client.send_prompt(fix_prompt)
+                    # Loop will try to parse this fixed response
                 else:
                     logger.error(f"All {self.max_retries + 1} attempts failed for PR #{pr_number}")
                     raise Exception(f"Failed to parse LLM response after {self.max_retries + 1} attempts") from e
@@ -123,6 +131,8 @@ class Classifier:
                 )
                 if attempt <= self.max_retries:
                     logger.info(f"Retrying in {self.retry_delay}s...")
+                    # Reset response_text so we send the original prompt again
+                    response_text = None
                     time.sleep(self.retry_delay)
                 else:
                     logger.error(f"All {self.max_retries + 1} attempts failed for PR #{pr_number}")
