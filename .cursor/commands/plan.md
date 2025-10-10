@@ -1,6 +1,6 @@
 # Plan
 
-Reference the relevant design document, and create or update `milestones.md`.
+Reference the relevant design document, and create or update a doc in the `milestones` directory, following the naming convention: `001_milestones.md`.
 
 Create a series of milestones. The design should be built in an iterative, progressive way, so that we can verify and test along the way.
 
