@@ -55,6 +55,9 @@ export interface PullRequest {
   classified_at?: string | null;
   
   llm_payload?: string | null;
+  
+  // Favorite field
+  is_favorite?: boolean;
 }
 
 export interface PRListResponse {
