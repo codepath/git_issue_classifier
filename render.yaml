@@ -5,7 +5,7 @@
 services:
   # Backend API (FastAPI + Python)
   - type: web
-    name: git-issue-classifier-api
+    name: openbootstrap-api
     runtime: python
     plan: starter  # Starter plan - no cold starts, always available
     region: oregon  # Choose closest to your users: oregon, frankfurt, singapore, ohio
@@ -34,7 +34,7 @@ services:
     
   # Frontend (React + Vite)
   - type: web
-    name: git-issue-classifier-frontend
+    name: openbootstrap
     runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
@@ -48,5 +48,5 @@ services:
       # Vite uses VITE_ prefix for env vars
       # Backend API URL will be injected at build time
       - key: VITE_API_URL
-        value: https://git-issue-classifier-api.onrender.com  # Update with your backend URL after first deploy
+        value: https://openbootstrap-api.onrender.com  # Update with your backend URL after first deploy
 

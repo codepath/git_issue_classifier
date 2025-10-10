@@ -1,10 +1,10 @@
-# Git Issue Classifier
+# Open Bootstrap
 
-An onboarding tool that helps developers learn large codebases by classifying historical GitHub/GitLab merge requests for educational purposes.
+Bootstrap new developers into open source projects by helping them learn large codebases through historical GitHub/GitLab pull requests.
 
 ## Overview
 
-This tool fetches historical PRs, analyzes them using LLM classification, and exports summaries to help new developers find suitable learning exercises based on difficulty, categories, and learning value.
+Open Bootstrap fetches historical PRs, analyzes them using LLM classification, and helps you select the right onboarding exercises for new developers based on difficulty, suitability, and learning value. Developers familiarize themselves with a project by implementing past merged pull requests in a time-rewound fork.
 
 ## Prerequisites
 
@@ -15,10 +15,10 @@ This tool fetches historical PRs, analyzes them using LLM classification, and ex
 ## Installation
 
 1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd git_issue_classifier
-   ```
+```bash
+git clone <repository-url>
+cd openbootstrap
+```
 
 2. Install dependencies using `uv`:
    ```bash
@@ -78,8 +78,8 @@ See [setup/README.md](setup/README.md) for detailed documentation.
 ## Project Structure
 
 ```
-git_issue_classifier/
-├── backend/         # FastAPI REST API for PR Explorer
+openbootstrap/
+├── backend/         # FastAPI REST API
 ├── frontend/        # React + TypeScript web UI
 ├── fetchers/        # GitHub/GitLab API clients
 ├── storage/         # Supabase database client
@@ -177,7 +177,7 @@ https://gitlab.com/gitlab-org/gitlab
 https://github.com/vercel/next.js
 ```
 
-### PR Explorer Web UI
+### Web UI
 
 After fetching and classifying PRs, you can browse them using the web interface:
 

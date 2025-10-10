@@ -1,6 +1,6 @@
 # Deployment Guide - Render
 
-This guide walks you through deploying the Git Issue Classifier to Render using the `render.yaml` blueprint.
+This guide walks you through deploying Open Bootstrap to Render using the `render.yaml` blueprint.
 
 ## Prerequisites
 
@@ -53,12 +53,12 @@ OPENAI_API_KEY=sk-...  # If using OpenAI instead of Anthropic
 
 #### Frontend Environment Variables
 
-After the backend is deployed, get its URL (e.g., `https://git-issue-classifier-api.onrender.com`)
+After the backend is deployed, get its URL (e.g., `https://openbootstrap-api.onrender.com`)
 
 Go to your frontend service → **Environment** tab and update:
 
 ```bash
-VITE_API_URL=https://git-issue-classifier-api.onrender.com
+VITE_API_URL=https://openbootstrap-api.onrender.com
 ```
 
 **Important:** After updating `VITE_API_URL`, you must **manually redeploy** the frontend for the change to take effect (click "Manual Deploy" → "Clear build cache & deploy").
@@ -80,7 +80,7 @@ If you prefer to create services manually instead of using the Blueprint:
 1. **New Web Service**
 2. **Connect Repository**
 3. **Configure:**
-   - Name: `git-issue-classifier-api`
+   - Name: `openbootstrap-api`
    - Runtime: `Python 3`
    - Build Command: `pip install uv && uv sync --frozen`
    - Start Command: `uv run uvicorn backend.app:app --host 0.0.0.0 --port $PORT`
@@ -92,7 +92,7 @@ If you prefer to create services manually instead of using the Blueprint:
 1. **New Static Site**
 2. **Connect Repository**
 3. **Configure:**
-   - Name: `git-issue-classifier-frontend`
+   - Name: `openbootstrap`
    - Build Command: `cd frontend && npm install && npm run build`
    - Publish Directory: `frontend/dist`
    - Add environment variable: `VITE_API_URL=<your-backend-url>`
