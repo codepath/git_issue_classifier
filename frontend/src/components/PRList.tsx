@@ -114,21 +114,21 @@ function PRList() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto p-6">
+      <div className="w-[1400px] mx-auto px-5 py-4">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
             Pull Request Explorer
           </h1>
-          <p className="text-gray-600">
+          <p className="text-sm text-gray-600">
             Browse {data?.total.toLocaleString() || "..."} pull requests across repositories
           </p>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="bg-white rounded-lg shadow p-3 mb-4">
           {/* Row 1: Repository Filter */}
-          <div className="flex gap-4 items-center mb-4">
+          <div className="flex gap-3 items-center mb-3">
             <label className="text-sm font-medium text-gray-700">
               Repository:
             </label>
@@ -138,7 +138,7 @@ function PRList() {
                 setSelectedRepo(e.target.value);
                 setPage(1); // Reset to first page when filter changes
               }}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Repositories</option>
               {reposData?.repos.map((repo) => (
@@ -150,7 +150,7 @@ function PRList() {
           </div>
 
           {/* Row 2: Date and Sort Controls */}
-          <div className="flex gap-6 items-center flex-wrap">
+          <div className="flex gap-5 items-center flex-wrap">
             {/* Date Picker */}
             <div className="flex gap-2 items-center">
               <label className="text-sm font-medium text-gray-700">
@@ -163,7 +163,7 @@ function PRList() {
                   setCutoffDate(e.target.value);
                   setPage(1); // Reset to first page when filter changes
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -178,7 +178,7 @@ function PRList() {
                   setSortOrder(e.target.value as "asc" | "desc");
                   setPage(1); // Reset to first page when sort changes
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="asc">Oldest First (Chronological)</option>
                 <option value="desc">Newest First</option>
@@ -187,8 +187,8 @@ function PRList() {
           </div>
 
           {/* Row 3: Classification Filters */}
-          <div className="flex gap-6 items-center flex-wrap mt-4 pt-4 border-t">
-            <div className="text-sm font-medium text-gray-700 mr-2">
+          <div className="flex gap-5 items-center flex-wrap mt-3 pt-3 border-t">
+            <div className="text-sm font-medium text-gray-700">
               Classification Filters:
             </div>
 
@@ -203,7 +203,7 @@ function PRList() {
                   setOnboardingSuitability(e.target.value);
                   setPage(1);
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All</option>
                 <option value="excellent">Excellent</option>
@@ -222,7 +222,7 @@ function PRList() {
                   setDifficulty(e.target.value);
                   setPage(1);
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All</option>
                 <option value="trivial">Trivial</option>
@@ -234,7 +234,7 @@ function PRList() {
 
             {/* Favorites Only Checkbox */}
             <div className="flex gap-2 items-center">
-              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showOnlyFavorites}
@@ -242,7 +242,7 @@ function PRList() {
                     setShowOnlyFavorites(e.target.checked);
                     setPage(1);
                   }}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
                 <span>Favorites Only</span>
               </label>
@@ -257,7 +257,7 @@ function PRList() {
                   setShowOnlyFavorites(false);
                   setPage(1);
                 }}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
               >
                 Clear All Filters
               </button>
@@ -267,16 +267,16 @@ function PRList() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-            <p className="mt-2 text-gray-600">Loading PRs...</p>
+          <div className="bg-white rounded-lg shadow p-6 text-center">
+            <div className="inline-block h-7 w-7 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+            <p className="mt-2 text-sm text-gray-600">Loading PRs...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-800">
               <strong>Error:</strong> {(error as Error).message}
             </p>
           </div>
@@ -286,28 +286,28 @@ function PRList() {
         {data && !isLoading && (
           <>
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wide w-12">
                       ★
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Repository
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       PR #
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Title
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Suitability
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Difficulty
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Merged Date
                     </th>
                   </tr>
@@ -317,7 +317,7 @@ function PRList() {
                     <tr>
                       <td
                         colSpan={7}
-                        className="px-6 py-8 text-center text-gray-500"
+                        className="px-4 py-6 text-center text-sm text-gray-500"
                       >
                         No PRs found
                       </td>
@@ -329,26 +329,26 @@ function PRList() {
                         onClick={() => handleRowClick(pr)}
                         className="hover:bg-gray-50 cursor-pointer transition-colors"
                       >
-                        <td className="px-4 py-4 whitespace-nowrap text-center">
+                        <td className="px-3 py-2.5 whitespace-nowrap text-center">
                           <button
                             onClick={(e) => handleFavoriteClick(e, pr)}
-                            className="text-2xl leading-none hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+                            className="text-xl leading-none hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
                             aria-label={pr.is_favorite ? "Remove from favorites" : "Add to favorites"}
                             title={pr.is_favorite ? "Remove from favorites" : "Add to favorites"}
                           >
                             {pr.is_favorite ? "★" : "☆"}
                           </button>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-900">
                           {pr.repo}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                        <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium text-blue-600">
                           #{pr.pr_number}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
+                        <td className="px-4 py-2.5 text-sm text-gray-900 max-w-lg truncate">
                           {pr.title}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-2.5 whitespace-nowrap">
                           {pr.onboarding_suitability ? (
                             <Badge 
                               variant={
@@ -363,7 +363,7 @@ function PRList() {
                             <span className="text-xs text-gray-400">N/A</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                           {pr.difficulty ? (
                             <Badge variant="secondary">
                               {pr.difficulty}
@@ -372,7 +372,7 @@ function PRList() {
                             <span className="text-xs text-gray-400">N/A</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-500">
                           {new Date(pr.merged_at).toLocaleDateString()}
                         </td>
                       </tr>
@@ -383,7 +383,7 @@ function PRList() {
             </div>
 
             {/* Pagination */}
-            <div className="mt-6 flex items-center justify-between">
+            <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-gray-700">
                 Page {page} of {totalPages} ({data.total.toLocaleString()} total
                 PRs)
@@ -392,14 +392,14 @@ function PRList() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                 </button>
