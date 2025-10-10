@@ -22,71 +22,68 @@ class TestSupabaseClassificationMethods:
     
     def test_get_unclassified_prs(self):
         """Test querying unclassified PRs."""
-        # Mock the main query for PRs
-        mock_pr_query = MagicMock()
-        mock_pr_result = Mock()
-        mock_pr_result.data = [
+        # Mock the query chain
+        mock_query = MagicMock()
+        mock_result = Mock()
+        mock_result.data = [
             {
                 "id": 1,
                 "repo": "facebook/react",
                 "pr_number": 123,
                 "title": "Test PR 1",
-                "enrichment_status": "success"
+                "enrichment_status": "success",
+                "classified_at": None  # Not yet classified
             },
             {
                 "id": 2,
                 "repo": "facebook/react",
                 "pr_number": 124,
                 "title": "Test PR 2",
-                "enrichment_status": "success"
+                "enrichment_status": "success",
+                "classified_at": None  # Not yet classified
             }
         ]
         
-        # Mock the classification check queries (no classifications exist)
-        mock_classification_result = Mock()
-        mock_classification_result.data = []
-        
-        # Set up mock to return different things based on table name
-        def table_side_effect(table_name):
-            if table_name == "pull_requests":
-                mock_chain = MagicMock()
-                mock_chain.select.return_value = mock_chain
-                mock_chain.eq.return_value = mock_chain
-                mock_chain.order.return_value = mock_chain
-                mock_chain.limit.return_value = mock_chain
-                mock_chain.execute.return_value = mock_pr_result
-                return mock_chain
-            elif table_name == "classifications":
-                mock_chain = MagicMock()
-                mock_chain.select.return_value = mock_chain
-                mock_chain.eq.return_value = mock_chain
-                mock_chain.execute.return_value = mock_classification_result
-                return mock_chain
-        
-        self.mock_supabase.table.side_effect = table_side_effect
+        # Set up query chain mock
+        self.mock_supabase.table.return_value = mock_query
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.is_.return_value = mock_query
+        mock_query.order.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
+        mock_query.execute.return_value = mock_result
         
         # Call method
         result = self.client.get_unclassified_prs(limit=100, repo="facebook/react")
         
         # Verify it queried correctly
-        self.mock_supabase.table.assert_called()
+        self.mock_supabase.table.assert_called_with("pull_requests")
+        mock_query.eq.assert_any_call("enrichment_status", "success")
+        mock_query.is_.assert_called_with("classified_at", "null")
         assert len(result) == 2
         assert result[0]["pr_number"] == 123
     
     def test_save_classification(self):
         """Test saving classification to database."""
-        # Mock the upsert chain
+        # Mock the update chain
         mock_query = MagicMock()
         mock_result = Mock()
         mock_result.data = [{
-            "id": 1,
-            "pr_id": 123,
+            "id": 123,
             "difficulty": "medium",
+            "task_clarity": "clear",
+            "is_reproducible": "highly likely",
+            "onboarding_suitability": "excellent",
             "categories": ["feature", "api"],
+            "concepts_taught": ["API design"],
+            "prerequisites": ["Basic React"],
+            "reasoning": "This adds a new API endpoint."
         }]
         
         self.mock_supabase.table.return_value = mock_query
-        mock_query.upsert.return_value = mock_query
+        mock_query.update.return_value = mock_query
+        mock_query.eq.return_value = mock_query
         mock_query.execute.return_value = mock_result
         
         # Test data
@@ -100,6 +97,9 @@ class TestSupabaseClassificationMethods:
         
         classification = {
             "difficulty": "medium",
+            "task_clarity": "clear",
+            "is_reproducible": "highly likely",
+            "onboarding_suitability": "excellent",
             "categories": ["feature", "api"],
             "concepts_taught": ["API design"],
             "prerequisites": ["Basic React"],
@@ -113,56 +113,54 @@ class TestSupabaseClassificationMethods:
             classification=classification
         )
         
-        # Verify it called upsert
-        self.mock_supabase.table.assert_called_with("classifications")
-        mock_query.upsert.assert_called_once()
+        # Verify it called update on pull_requests table
+        self.mock_supabase.table.assert_called_with("pull_requests")
+        mock_query.update.assert_called_once()
+        mock_query.eq.assert_called_with("id", 123)
         
-        # Verify the record structure
-        call_args = mock_query.upsert.call_args[0][0]
-        assert call_args["pr_id"] == 123
+        # Verify the update record structure
+        call_args = mock_query.update.call_args[0][0]
         assert call_args["difficulty"] == "medium"
+        assert call_args["task_clarity"] == "clear"
         assert call_args["categories"] == ["feature", "api"]
-        assert "github_url" in call_args
-        assert "facebook/react" in call_args["github_url"]
+        assert "classified_at" in call_args
     
     def test_get_classification_stats(self):
         """Test getting classification statistics."""
-        # Mock count queries
+        # Mock the query result with actual classification data
         mock_query = MagicMock()
-        
-        # Mock total count
-        total_result = Mock()
-        total_result.count = 100
-        
-        # Mock difficulty counts
-        trivial_result = Mock()
-        trivial_result.count = 10
-        easy_result = Mock()
-        easy_result.count = 30
-        medium_result = Mock()
-        medium_result.count = 40
-        hard_result = Mock()
-        hard_result.count = 20
+        mock_result = Mock()
+        mock_result.data = [
+            {"difficulty": "trivial", "task_clarity": "clear", "is_reproducible": "highly likely", "onboarding_suitability": "excellent"},
+            {"difficulty": "trivial", "task_clarity": "clear", "is_reproducible": "maybe", "onboarding_suitability": "excellent"},
+            {"difficulty": "easy", "task_clarity": "partial", "is_reproducible": "highly likely", "onboarding_suitability": "excellent"},
+            {"difficulty": "medium", "task_clarity": "clear", "is_reproducible": "unclear", "onboarding_suitability": "poor"},
+            {"difficulty": "hard", "task_clarity": "poor", "is_reproducible": "maybe", "onboarding_suitability": "poor"},
+        ]
         
         # Set up query chain
         self.mock_supabase.table.return_value = mock_query
         mock_query.select.return_value = mock_query
+        mock_query.not_ = mock_query
+        mock_query.is_.return_value = mock_query
         mock_query.eq.return_value = mock_query
-        mock_query.execute.side_effect = [
-            total_result,
-            trivial_result,
-            easy_result,
-            medium_result,
-            hard_result
-        ]
+        mock_query.execute.return_value = mock_result
         
         # Call method
         stats = self.client.get_classification_stats(repo="facebook/react")
         
-        # Verify
-        assert stats["total_classified"] == 100
-        assert stats["trivial"] == 10
-        assert stats["easy"] == 30
-        assert stats["medium"] == 40
-        assert stats["hard"] == 20
+        # Verify it queries pull_requests with difficulty not null
+        self.mock_supabase.table.assert_called_with("pull_requests")
+        
+        # Verify counts
+        assert stats["total_classified"] == 5
+        assert stats["by_difficulty"]["trivial"] == 2
+        assert stats["by_difficulty"]["easy"] == 1
+        assert stats["by_difficulty"]["medium"] == 1
+        assert stats["by_difficulty"]["hard"] == 1
+        assert stats["by_task_clarity"]["clear"] == 3
+        assert stats["by_task_clarity"]["partial"] == 1
+        assert stats["by_task_clarity"]["poor"] == 1
+        assert stats["by_onboarding"]["excellent"] == 3
+        assert stats["by_onboarding"]["poor"] == 2
 

@@ -340,6 +340,7 @@ class TestFetchPRFiles:
         assert result["summary"]["files_included"] == 10
         assert result["summary"]["total_additions"] == 15
         assert result["summary"]["total_deletions"] == 0
+        assert result["summary"]["truncated"] == True  # File list is truncated
         
         # Should only return first 10
         assert len(result["files"]) == 10
@@ -370,10 +371,10 @@ class TestFetchPRFiles:
         with patch("requests.get", return_value=mock_response):
             result = fetcher.fetch_pr_files("owner", "repo", 123)
         
-        # Check summary shows truncation
-        assert result["summary"]["truncated"] == True
+        # File list is NOT truncated (only 1 file, all shown)
+        assert result["summary"]["truncated"] == False
         
-        # Verify patch was truncated
+        # But the individual patch was truncated
         file = result["files"][0]
         assert file["patch_truncated"] == True
         assert "... [TRUNCATED: 50 more lines]" in file["patch"]
