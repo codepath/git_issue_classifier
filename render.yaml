@@ -14,7 +14,7 @@ services:
     healthCheckPath: /api/repos
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11"
+        value: "3.11.9"
       - key: SUPABASE_URL
         sync: false  # Set manually in Render Dashboard
       - key: SUPABASE_KEY
