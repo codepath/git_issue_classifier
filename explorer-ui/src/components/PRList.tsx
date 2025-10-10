@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { fetchPRs, fetchRepos } from "@/lib/api";
-import type { PullRequest } from "@/types/pr";
+import { fetchPRs, fetchRepos, toggleFavorite } from "@/lib/api";
+import type { PullRequest, PRListResponse } from "@/types/pr";
 import { Badge } from "@/components/ui/badge";
 
 // Helper function to calculate date N months ago
@@ -14,6 +14,7 @@ function getDateMonthsAgo(months: number): string {
 
 function PRList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedRepo, setSelectedRepo] = useState<string>("");
   const [page, setPage] = useState(1);
   const perPage = 50;
@@ -25,6 +26,9 @@ function PRList() {
   // Classification filter state
   const [onboardingSuitability, setOnboardingSuitability] = useState<string>("");
   const [difficulty, setDifficulty] = useState<string>("");
+  
+  // Favorite filter state
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState<boolean>(false);
 
   // Fetch repositories for filter dropdown
   const { data: reposData } = useQuery({
@@ -34,7 +38,7 @@ function PRList() {
 
   // Fetch PRs with pagination and filtering
   const { data, isLoading, error } = useQuery({
-    queryKey: ["prs", selectedRepo, page, cutoffDate, sortOrder, onboardingSuitability, difficulty],
+    queryKey: ["prs", selectedRepo, page, cutoffDate, sortOrder, onboardingSuitability, difficulty, showOnlyFavorites],
     queryFn: () => fetchPRs(
       selectedRepo || undefined, 
       page, 
@@ -44,9 +48,60 @@ function PRList() {
       onboardingSuitability || undefined,
       difficulty || undefined,
       undefined, // taskClarity - not used
-      undefined  // isReproducible - not used
+      undefined, // isReproducible - not used
+      showOnlyFavorites ? true : undefined
     ),
   });
+
+  // Mutation for toggling favorites with optimistic updates
+  const favoriteMutation = useMutation({
+    mutationFn: ({ repo, prNumber }: { repo: string; prNumber: number }) =>
+      toggleFavorite(repo, prNumber),
+    onMutate: async ({ repo, prNumber }) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["prs"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(["prs", selectedRepo, page, cutoffDate, sortOrder, onboardingSuitability, difficulty, showOnlyFavorites]);
+
+      // Optimistically update the UI
+      queryClient.setQueryData(
+        ["prs", selectedRepo, page, cutoffDate, sortOrder, onboardingSuitability, difficulty, showOnlyFavorites],
+        (old: PRListResponse | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            prs: old.prs.map((pr: PullRequest) =>
+              pr.repo === repo && pr.pr_number === prNumber
+                ? { ...pr, is_favorite: !pr.is_favorite }
+                : pr
+            ),
+          };
+        }
+      );
+
+      return { previousData };
+    },
+    onError: (err, _variables, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["prs", selectedRepo, page, cutoffDate, sortOrder, onboardingSuitability, difficulty, showOnlyFavorites],
+          context.previousData
+        );
+      }
+      console.error("Failed to toggle favorite:", err);
+    },
+    onSettled: () => {
+      // Refetch to ensure data consistency
+      queryClient.invalidateQueries({ queryKey: ["prs"] });
+    },
+  });
+
+  const handleFavoriteClick = (e: React.MouseEvent, pr: PullRequest) => {
+    e.stopPropagation(); // Don't trigger row click
+    favoriteMutation.mutate({ repo: pr.repo, prNumber: pr.pr_number });
+  };
 
   const handleRowClick = (pr: PullRequest) => {
     // Navigate to PR detail page
@@ -177,12 +232,29 @@ function PRList() {
               </select>
             </div>
 
+            {/* Favorites Only Checkbox */}
+            <div className="flex gap-2 items-center">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showOnlyFavorites}
+                  onChange={(e) => {
+                    setShowOnlyFavorites(e.target.checked);
+                    setPage(1);
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span>Favorites Only</span>
+              </label>
+            </div>
+
             {/* Clear Filters Button */}
-            {(onboardingSuitability || difficulty) && (
+            {(onboardingSuitability || difficulty || showOnlyFavorites) && (
               <button
                 onClick={() => {
                   setOnboardingSuitability("");
                   setDifficulty("");
+                  setShowOnlyFavorites(false);
                   setPage(1);
                 }}
                 className="px-3 py-2 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
@@ -217,6 +289,9 @@ function PRList() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      ★
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Repository
                     </th>
@@ -241,7 +316,7 @@ function PRList() {
                   {data.prs.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="px-6 py-8 text-center text-gray-500"
                       >
                         No PRs found
@@ -254,6 +329,16 @@ function PRList() {
                         onClick={() => handleRowClick(pr)}
                         className="hover:bg-gray-50 cursor-pointer transition-colors"
                       >
+                        <td className="px-4 py-4 whitespace-nowrap text-center">
+                          <button
+                            onClick={(e) => handleFavoriteClick(e, pr)}
+                            className="text-2xl leading-none hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+                            aria-label={pr.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                            title={pr.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            {pr.is_favorite ? "★" : "☆"}
+                          </button>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {pr.repo}
                         </td>
