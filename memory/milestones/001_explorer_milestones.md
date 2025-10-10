@@ -21,10 +21,11 @@ Build a React + FastAPI web application to browse ~1000 PRs stored in Supabase. 
 
 **Tasks:**
 - [ ] Add FastAPI dependency to `pyproject.toml`
-- [ ] Create `explorer/` directory structure:
-  - [ ] `explorer/app.py` - FastAPI app initialization
-  - [ ] `explorer/routes.py` - API route definitions
-- [ ] Initialize `SupabaseClient` in explorer (reuse from `storage/supabase_client.py`)
+- [ ] Create `backend/` directory structure:
+  - [ ] `backend/app.py` - FastAPI app initialization
+  - [ ] `backend/routes.py` - API route definitions
+  - [ ] `backend/server.py` - Uvicorn entry point
+- [ ] Initialize `SupabaseClient` in backend (reuse from `storage/supabase_client.py`)
 - [ ] Implement `GET /api/prs` endpoint:
   - [ ] Accept query params: `repo` (optional), `page` (default 1), `per_page` (default 50)
   - [ ] Return paginated list of PRs
@@ -34,9 +35,9 @@ Build a React + FastAPI web application to browse ~1000 PRs stored in Supabase. 
   - [ ] Use existing `supabase.get_pr_by_number()` method
   - [ ] Return single PR with full details
   - [ ] Return 404 if not found
-- [ ] Add `explore` subcommand to `main.py`:
+- [ ] Create standalone server entry point in `backend/server.py`:
   - [ ] Run FastAPI with uvicorn
-  - [ ] Accept `--port` parameter (default 8000)
+  - [ ] Accept `--host` and `--port` parameters (default 127.0.0.1:8000)
   - [ ] Enable CORS for local development
 - [ ] Test API endpoints with curl/Postman:
   - [ ] List all PRs
@@ -50,7 +51,7 @@ Build a React + FastAPI web application to browse ~1000 PRs stored in Supabase. 
 **Dependencies:** None - uses existing `SupabaseClient`
 
 **Acceptance Criteria:**
-- [ ] `uv run python main.py explore` starts FastAPI server
+- [ ] `python backend/server.py` or `uvicorn backend.app:app --reload` starts FastAPI server
 - [ ] Can fetch paginated list of PRs via `/api/prs?page=1&per_page=50`
 - [ ] Can filter by repo via `/api/prs?repo=facebook/react`
 - [ ] Can fetch single PR via `/api/prs/facebook/react/12345`
@@ -66,11 +67,11 @@ Build a React + FastAPI web application to browse ~1000 PRs stored in Supabase. 
 **Time Estimate:** 3-4 hours
 
 **Tasks:**
-- [ ] Create `explorer-ui/` directory
+- [ ] Create `frontend/` directory
 - [ ] Initialize Vite + React + TypeScript project:
   ```bash
-  npm create vite@latest explorer-ui -- --template react-ts
-  cd explorer-ui
+  npm create vite@latest frontend -- --template react-ts
+  cd frontend
   npm install
   ```
 - [ ] Install and configure shadcn/ui:
@@ -255,8 +256,8 @@ Build a React + FastAPI web application to browse ~1000 PRs stored in Supabase. 
   - [ ] Safari (if available)
 - [ ] Fix any bugs found
 - [ ] Update README with:
-  - [ ] How to run backend: `uv run python main.py explore`
-  - [ ] How to run frontend: `cd explorer-ui && npm run dev`
+  - [ ] How to run backend: `python backend/server.py` or `uvicorn backend.app:app --reload`
+  - [ ] How to run frontend: `cd frontend && npm run dev`
   - [ ] Required ports: 8000 (backend), 5173 (frontend)
 
 **Deliverable:** Polished, tested PR explorer ready for use
@@ -389,7 +390,7 @@ These are nice-to-have features that can be added later:
 
 ### Frontend Tests (Vitest + React Testing Library)
 
-**Location:** `explorer-ui/src/__tests__/`
+**Location:** `frontend/src/__tests__/`
 
 #### Test Suite 3: API Client Functions
 **File:** `api.test.ts`
@@ -499,8 +500,8 @@ These are nice-to-have features that can be added later:
   - Assert: Detail page loads correctly
 
 **How to run:**
-- Unit tests: `cd explorer-ui && npm test`
-- E2E tests: `cd explorer-ui && npm run test:e2e` (optional)
+- Unit tests: `cd frontend && npm test`
+- E2E tests: `cd frontend && npm run test:e2e` (optional)
 
 ---
 
@@ -511,7 +512,7 @@ These are nice-to-have features that can be added later:
 # tests/test_explorer_api.py
 import pytest
 from fastapi.testclient import TestClient
-from explorer.app import app
+from backend.app import app
 
 @pytest.fixture
 def client():
@@ -526,7 +527,7 @@ def mock_supabase(monkeypatch):
 #### Frontend Test Setup
 ```bash
 # Install test dependencies
-cd explorer-ui
+cd frontend
 npm install -D vitest @testing-library/react @testing-library/jest-dom
 npm install -D @testing-library/user-event msw
 
@@ -534,7 +535,7 @@ npm install -D @testing-library/user-event msw
 npm install -D @playwright/test
 ```
 
-**Frontend test config:** `explorer-ui/vitest.config.ts`
+**Frontend test config:** `frontend/vitest.config.ts`
 
 ---
 
@@ -568,7 +569,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: Run frontend tests
         run: |
-          cd explorer-ui
+          cd frontend
           npm install
           npm test
 ```
@@ -587,8 +588,8 @@ jobs:
 
 When all milestones are complete:
 
-- [ ] Can run backend: `uv run python main.py explore`
-- [ ] Can run frontend: `cd explorer-ui && npm run dev`
+- [ ] Can run backend: `python backend/server.py` or `uvicorn backend.app:app --reload`
+- [ ] Can run frontend: `cd frontend && npm run dev`
 - [ ] Can browse, filter, and paginate through all PRs
 - [ ] Can view detailed information for any PR
 - [ ] UI is polished and professional

@@ -39,7 +39,7 @@ app.add_middleware(
 )
 
 # Import and include routes
-from explorer.routes import router
+from backend.routes import router
 app.include_router(router)
 
 logger.info("FastAPI app initialized")

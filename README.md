@@ -79,13 +79,15 @@ See [setup/README.md](setup/README.md) for detailed documentation.
 
 ```
 git_issue_classifier/
+├── backend/         # FastAPI REST API for PR Explorer
+├── frontend/        # React + TypeScript web UI
 ├── fetchers/        # GitHub/GitLab API clients
-├── storage/         # Supabase and Google Sheets clients
+├── storage/         # Supabase database client
 ├── classifier/      # LLM classification logic
 ├── models/          # Data models (Pydantic)
-├── utils/           # Logging, rate limiting, helpers
+├── utils/           # Logging, configuration, helpers
 ├── setup/           # Database setup scripts
-└── main.py          # CLI entrypoint
+└── main.py          # CLI entrypoint (fetch/classify)
 ```
 
 ## Usage
@@ -175,11 +177,59 @@ https://gitlab.com/gitlab-org/gitlab
 https://github.com/vercel/next.js
 ```
 
-### Future: Repository Management & Web UI
+### PR Explorer Web UI
+
+After fetching and classifying PRs, you can browse them using the web interface:
+
+#### Backend API Server
+
+Start the FastAPI backend server:
+
+```bash
+# Method 1: Direct Python execution
+python backend/server.py
+
+# Method 2: Using uvicorn directly
+uvicorn backend.app:app --reload
+
+# Method 3: Python module
+python -m backend.server
+
+# Custom host/port
+python backend/server.py --host 0.0.0.0 --port 8080
+
+# Production mode (no auto-reload)
+python backend/server.py --no-reload
+```
+
+The API will be available at:
+- **API endpoint:** http://127.0.0.1:8000
+- **Interactive docs:** http://127.0.0.1:8000/docs
+
+#### Frontend UI
+
+In a separate terminal, start the React frontend:
+
+```bash
+cd frontend
+npm install  # First time only
+npm run dev
+```
+
+The web UI will be available at http://localhost:5173
+
+**Features:**
+- Browse classified PRs with pagination
+- Filter by repository, difficulty, suitability
+- View PR details: files changed, linked issues, comments
+- Inspect exact LLM prompts used for classification
+- Mark PRs as favorites for learning exercises
+
+### Future: Repository Management
 
 - Persistent repository tracking in database
-- Web interface for browsing and managing classified PRs
 - Progress tracking for learning exercises
+- Export learning paths to various formats
 
 ## Development Status
 
@@ -207,11 +257,13 @@ uv run pytest tests/test_config.py::TestConfig::test_valid_config
 
 ### Project Structure
 
+- `backend/` - FastAPI REST API server
+- `frontend/` - React + TypeScript web UI
 - `models/` - Pydantic data models for validation
 - `utils/` - Configuration loading and logging utilities
 - `fetchers/` - API clients for GitHub and GitLab
-- `storage/` - Database and export clients (coming soon)
-- `classifier/` - LLM classification logic (coming soon)
+- `storage/` - Supabase database client
+- `classifier/` - LLM classification logic
 - `tests/` - Test suite
 
 ## Reference

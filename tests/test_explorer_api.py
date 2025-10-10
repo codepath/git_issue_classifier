@@ -22,8 +22,8 @@ def mock_supabase():
 def client(mock_supabase):
     """Create FastAPI test client with mocked Supabase."""
     # Patch the supabase client in the routes module
-    with patch('explorer.routes.supabase', mock_supabase):
-        from explorer.app import app
+    with patch('backend.routes.supabase', mock_supabase):
+        from backend.app import app
         with TestClient(app) as test_client:
             yield test_client
 

@@ -699,24 +699,7 @@ Examples:
         default=5,
         help="Number of parallel classification requests (default: 5, recommended max: 10)"
     )
-    # Explore command
-    explore_parser = subparsers.add_parser(
-        "explore",
-        help="Start the PR Explorer web UI"
-    )
-    explore_parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port to run the API server on (default: 8000)"
-    )
-    explore_parser.add_argument(
-        "--host",
-        type=str,
-        default="127.0.0.1",
-        help="Host to bind the server to (default: 127.0.0.1)"
-    )
-
+    
     subparsers.add_parser(
         "export",
         help="Export classified PRs to Google Sheets (coming soon)"
@@ -769,31 +752,6 @@ Examples:
         
         sys.exit(0 if success else 1)
     
-    # Handle explore command
-    elif args.command == "explore":
-        logger.info("=" * 80)
-        logger.info("Starting PR Explorer API Server")
-        logger.info("=" * 80)
-        logger.info(f"API will be available at: http://{args.host}:{args.port}")
-        logger.info(f"API docs available at: http://{args.host}:{args.port}/docs")
-        logger.info("")
-        logger.info("To start the frontend:")
-        logger.info("  cd explorer-ui && npm run dev")
-        logger.info("")
-        logger.info("Press Ctrl+C to stop the server")
-        logger.info("=" * 80)
-
-        # Start uvicorn server
-        import uvicorn
-        uvicorn.run(
-            "explorer.app:app",
-            host=args.host,
-            port=args.port,
-            reload=True,  # Enable auto-reload during development
-            log_level="info"
-        )
-        sys.exit(0)
-
     # Handle classify command
     elif args.command == "classify":
         # Load config
