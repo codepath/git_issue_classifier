@@ -134,3 +134,122 @@ Now, analyze the following pull request:
 
 Return your classification as JSON:"""
 
+
+ISSUE_GENERATION_PROMPT = """You are helping create training exercises for developers learning a new codebase.
+
+Your task is to analyze a pull request and generate a clear, actionable GitHub issue that a student could use to implement the same change independently.
+
+CONTEXT:
+You will receive:
+- The pull request title, description, and code changes
+- Any linked issue and discussion (if available)
+- Classification information (difficulty, concepts, etc.)
+
+YOUR TASK:
+Generate a markdown-formatted issue that includes:
+
+1. **Issue Title**: Clear, specific title describing the problem/task
+   - For bugs: "Description of broken behavior"
+   - For features: "Add [feature description]"
+   - For refactors: "Refactor [component] to [improvement]"
+
+2. **Motivation**: 1-2 paragraphs explaining WHY this change matters
+   - What problem does it solve?
+   - What value does it provide to users/developers?
+   - What's the business/technical context?
+
+3. **Current Behavior**: Description of the existing state
+   - For bugs: Explain the broken behavior with reproduction steps
+   - For features: Explain what's missing or inadequate
+   - For refactors: Describe current implementation and its limitations
+   
+   Always include **Reproduction Steps** (numbered list):
+   - Specific, actionable steps anyone can follow
+   - Include expected vs actual results for bugs
+   - For refactors: steps to observe current behavior/limitations
+
+4. **Expected Behavior**: Description of desired state after implementation
+   - What should happen after the fix?
+   - How should the system behave?
+   
+   Include **Acceptance Criteria** (checkbox list):
+   - Specific, testable criteria
+   - 3-5 clear checkpoints
+
+5. **Verification**: How to test that the implementation works
+   - Manual testing steps (if applicable)
+   - Automated test commands (if applicable)
+   - What to look for to confirm success
+   
+   ALL changes must be testable:
+   - Bugs: Show the bug is fixed
+   - Features: Show the feature works as intended
+   - Refactors: Show tests still pass and behavior unchanged
+
+GUIDELINES:
+- Write as if you're a senior engineer creating a ticket for a junior developer
+- Be clear and specific, but not overly detailed or hand-holding
+- Follow engineering best practices for issue quality
+- Professional tone, appropriate technical level for the difficulty
+- Don't include hints or solution guidance - students should discover approach
+- Even refactors must be reproducible and testable
+- Extract the PROBLEM from the PR, not just describe the code changes
+- Make it pedagogical - a learning opportunity, not just a task
+
+DIFFICULTY CONSIDERATIONS:
+- **Trivial**: Very straightforward, minimal context needed
+- **Easy**: Clear steps, basic concepts, well-bounded
+- **Medium**: More context, multiple components, some investigation needed
+- **Hard**: Complex problem, requires system understanding, less prescriptive
+
+OUTPUT FORMAT:
+
+Return ONLY the markdown-formatted issue. Do not wrap it in JSON or code blocks.
+
+Follow this exact structure:
+# [Issue Title]
+
+## Motivation
+...
+
+## Current Behavior
+...
+
+**Reproduction Steps:**
+1. ...
+2. ...
+3. Observe: ...
+
+## Expected Behavior
+...
+
+**Acceptance Criteria:**
+- [ ] ...
+- [ ] ...
+- [ ] ...
+
+## Verification
+...
+
+IMPORTANT:
+- Return ONLY markdown text, no JSON wrapper, no code blocks
+- Use proper markdown formatting with headers, lists, checkboxes
+- Include all sections: Motivation, Current Behavior, Expected Behavior, Verification
+- Make reproduction steps specific and actionable
+- Make acceptance criteria testable
+- All PRs are reproducible and testable, even refactors
+
+Now, analyze the following pull request:
+
+---
+
+{pr_context}
+
+---
+
+CLASSIFICATION INFO:
+{classification_info}
+
+---
+
+Generate the issue in markdown format:"""
