@@ -5,7 +5,7 @@ Provides endpoints for listing and retrieving PR data from Supabase.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -13,7 +13,8 @@ from utils.config_loader import load_config
 from utils.logger import setup_logger
 from storage.supabase_client import SupabaseClient
 from classifier.context_builder import build_pr_context
-from classifier.prompt_template import CLASSIFICATION_PROMPT
+from classifier.prompt_template import CLASSIFICATION_PROMPT, ISSUE_GENERATION_PROMPT
+from classifier.llm_client import LLMClient
 
 logger = setup_logger(__name__)
 
@@ -64,6 +65,11 @@ class PRListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+
+class GenerateIssueRequest(BaseModel):
+    """Request body for issue generation endpoint."""
+    custom_prompt_template: Optional[str] = None
 
 
 @router.get("/prs", response_model=PRListResponse)
@@ -279,6 +285,98 @@ def get_llm_payload(repo: str, pr_number: int):
         raise HTTPException(status_code=500, detail=f"Failed to generate LLM payload: {str(e)}")
 
 
+@router.get("/prs/{repo:path}/{pr_number}/context")
+def get_pr_context(repo: str, pr_number: int):
+    """
+    Get the formatted PR context that will be sent to the LLM for issue generation.
+    
+    This endpoint provides the PR context and classification info for displaying
+    in the issue generation modal's "PR Context" tab.
+    
+    Path Parameters:
+    - repo: Repository name (e.g., "facebook/react")
+    - pr_number: PR number
+    
+    Returns:
+    - pr_context: Formatted PR context (metadata, files, issue, comments)
+    - classification_info: Formatted classification data or "No classification available"
+    
+    Raises:
+    - 404: If PR is not found
+    
+    Note:
+    Classification is optional - issue generation can work without it.
+    """
+    try:
+        # Fetch PR from database
+        pr = supabase.get_pr_by_number(repo, pr_number)
+        
+        if not pr:
+            logger.warning(f"PR not found for context: {repo}#{pr_number}")
+            raise HTTPException(status_code=404, detail=f"PR not found: {repo}#{pr_number}")
+        
+        # Build PR context using the same function used in classification
+        pr_context = build_pr_context(pr)
+        
+        # Format classification info if available
+        classification_info = ""
+        if pr.get("classified_at"):
+            # Classification exists - format it
+            classification_info = f"""Difficulty: {pr.get('difficulty', 'Unknown')}
+Task Clarity: {pr.get('task_clarity', 'Unknown')}
+Onboarding Suitability: {pr.get('onboarding_suitability', 'Unknown')}
+Is Reproducible: {pr.get('is_reproducible', 'Unknown')}
+Categories: {', '.join(pr.get('categories', []))}
+Concepts Taught: {', '.join(pr.get('concepts_taught', []))}
+Prerequisites: {', '.join(pr.get('prerequisites', []))}
+Reasoning: {pr.get('reasoning', 'N/A')}"""
+        else:
+            # No classification - that's okay
+            classification_info = "No classification available"
+        
+        logger.info(f"Generated PR context for {repo}#{pr_number}")
+        
+        return {
+            "pr_context": pr_context,
+            "classification_info": classification_info
+        }
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate PR context for {repo}#{pr_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PR context: {str(e)}")
+
+
+@router.get("/prompts/issue-generation")
+def get_issue_generation_prompt():
+    """
+    Get the default issue generation prompt template.
+    
+    This endpoint provides the prompt template used for generating student-facing
+    issues from PRs. The frontend can display this in the issue generation modal
+    to allow users to inspect and customize the prompt before generation.
+    
+    Returns:
+    - prompt_template: The default issue generation prompt template string
+    
+    Note:
+    The template contains placeholders {pr_context} and {classification_info}
+    that should be filled in before sending to the LLM.
+    """
+    try:
+        logger.info("Retrieved default issue generation prompt template")
+        
+        return {
+            "prompt_template": ISSUE_GENERATION_PROMPT
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to retrieve issue generation prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve prompt template: {str(e)}")
+
+
 @router.post("/prs/{repo:path}/{pr_number}/favorite")
 def toggle_favorite(repo: str, pr_number: int):
     """
@@ -328,6 +426,176 @@ def toggle_favorite(repo: str, pr_number: int):
     except Exception as e:
         logger.error(f"Failed to toggle favorite for {repo}#{pr_number}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to toggle favorite: {str(e)}")
+
+
+# ============================================================================
+# Issue Generation Endpoints (must come before general get_pr endpoint)
+# ============================================================================
+
+@router.get("/prompts/issue-generation")
+def get_default_issue_prompt():
+    """
+    Get the default issue generation prompt template.
+    
+    This allows the frontend to display and edit the prompt template
+    in the generation modal.
+    
+    Returns:
+    - prompt_template: The default issue generation prompt template string
+    """
+    try:
+        logger.info("Retrieved default issue generation prompt")
+        return {
+            "prompt_template": ISSUE_GENERATION_PROMPT
+        }
+    except Exception as e:
+        logger.error(f"Failed to get issue prompt template: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get prompt template: {str(e)}")
+
+
+@router.post("/prs/{repo:path}/{pr_number}/generate-issue")
+async def generate_issue(
+    repo: str,
+    pr_number: int,
+    request: Optional[GenerateIssueRequest] = None
+):
+    """
+    Generate a student-facing issue from a PR.
+    
+    This uses LLM to create a clear, actionable issue description
+    that includes motivation, reproduction steps, expected behavior,
+    and verification instructions.
+    
+    Path Parameters:
+    - repo: Repository name (e.g., "facebook/react")
+    - pr_number: PR number
+    
+    Request Body (optional):
+    - custom_prompt_template: Optional custom prompt template to use instead of default
+    
+    Returns:
+    - issue_markdown: The generated issue in markdown format
+    - generated_at: ISO 8601 timestamp of when the issue was generated
+    
+    Raises:
+    - 404: If PR is not found
+    - 500: If LLM API call fails or database update fails
+    """
+    try:
+        # 1. Fetch PR with classification
+        pr = supabase.get_pr_by_number(repo, pr_number)
+        if not pr:
+            logger.warning(f"PR not found for issue generation: {repo}#{pr_number}")
+            raise HTTPException(status_code=404, detail=f"PR not found: {repo}#{pr_number}")
+        
+        # 2. Check if PR is classified (recommended but not required)
+        if not pr.get("classified_at"):
+            logger.warning(f"Generating issue for unclassified PR {repo}#{pr_number}")
+        
+        # 3. Build context using existing context_builder
+        pr_context = build_pr_context(pr)
+        
+        # 4. Format classification info
+        classification_info = ""
+        if pr.get("classified_at"):
+            classification_info = f"""Difficulty: {pr.get('difficulty', 'Unknown')}
+Task Clarity: {pr.get('task_clarity', 'Unknown')}
+Is Reproducible: {pr.get('is_reproducible', 'Unknown')}
+Onboarding Suitability: {pr.get('onboarding_suitability', 'Unknown')}
+Categories: {', '.join(pr.get('categories', []))}
+Concepts Taught: {', '.join(pr.get('concepts_taught', []))}
+Prerequisites: {', '.join(pr.get('prerequisites', []))}
+Reasoning: {pr.get('reasoning', 'N/A')}"""
+        else:
+            classification_info = "No classification available"
+        
+        # 5. Use custom prompt template if provided, otherwise use default
+        prompt_template = (
+            request.custom_prompt_template
+            if request and request.custom_prompt_template
+            else ISSUE_GENERATION_PROMPT
+        )
+        
+        # 6. Fill template with context and classification
+        prompt = prompt_template.format(
+            pr_context=pr_context,
+            classification_info=classification_info
+        )
+        
+        # 7. Generate issue using LLM
+        logger.info(f"Generating issue for {repo}#{pr_number} using LLM")
+        provider = config.credentials.llm_provider
+        llm_client = LLMClient(
+            provider=provider,
+            model=config.credentials.llm_model,
+            api_key=config.credentials.anthropic_api_key if provider == "anthropic" else config.credentials.openai_api_key,
+            temperature=0.0,  # Use deterministic output for issue generation
+            max_tokens=16384
+        )
+        issue_markdown = llm_client.generate_issue(prompt)
+        
+        # 8. Save to database
+        generated_at = datetime.now(timezone.utc)
+        supabase.client.table("pull_requests").update({
+            "generated_issue": issue_markdown,
+            "issue_generated_at": generated_at.isoformat()
+        }).eq("id", pr["id"]).execute()
+        
+        logger.info(f"Generated and saved issue for {repo}#{pr_number} ({len(issue_markdown)} chars)")
+        
+        # 9. Return generated issue
+        return {
+            "issue_markdown": issue_markdown,
+            "generated_at": generated_at.isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate issue for {repo}#{pr_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate issue: {str(e)}")
+
+
+@router.get("/prs/{repo:path}/{pr_number}/generated-issue")
+def get_generated_issue(repo: str, pr_number: int):
+    """
+    Get the generated issue for a PR (if it exists).
+    
+    Path Parameters:
+    - repo: Repository name (e.g., "facebook/react")
+    - pr_number: PR number
+    
+    Returns:
+    - issue_markdown: The generated issue in markdown format
+    - generated_at: ISO 8601 timestamp of when the issue was generated
+    
+    Raises:
+    - 404: If PR is not found or no issue has been generated yet
+    """
+    try:
+        # Fetch PR from database
+        pr = supabase.get_pr_by_number(repo, pr_number)
+        if not pr:
+            logger.warning(f"PR not found for generated issue: {repo}#{pr_number}")
+            raise HTTPException(status_code=404, detail=f"PR not found: {repo}#{pr_number}")
+        
+        # Check if issue exists
+        if not pr.get("generated_issue"):
+            logger.info(f"No generated issue found for {repo}#{pr_number}")
+            raise HTTPException(status_code=404, detail="No issue generated for this PR yet")
+        
+        logger.info(f"Retrieved generated issue for {repo}#{pr_number}")
+        
+        return {
+            "issue_markdown": pr["generated_issue"],
+            "generated_at": pr.get("issue_generated_at")
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get generated issue for {repo}#{pr_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get generated issue: {str(e)}")
 
 
 @router.get("/prs/{repo:path}/{pr_number}")
