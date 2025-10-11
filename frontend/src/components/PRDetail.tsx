@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { fetchPR } from "@/lib/api";
+import { fetchPR, fetchGeneratedIssue } from "@/lib/api";
 import ClassificationCard from "./ClassificationCard";
+import GeneratedIssueCard from "./GeneratedIssueCard";
 import LLMPayloadCard from "./LLMPayloadCard";
 
 function PRDetail() {
@@ -19,6 +20,14 @@ function PRDetail() {
     queryKey: ["pr", fullRepo, prNumber],
     queryFn: () => fetchPR(fullRepo, prNumber),
     enabled: !!owner && !!repo && !!number,
+  });
+
+  // Fetch generated issue if it exists
+  const { data: generatedIssue } = useQuery({
+    queryKey: ["generated-issue", fullRepo, prNumber],
+    queryFn: () => fetchGeneratedIssue(fullRepo, prNumber),
+    enabled: !!owner && !!repo && !!number,
+    retry: false, // Don't retry 404s (issue may not exist yet)
   });
 
   if (isLoading) {
@@ -137,6 +146,13 @@ function PRDetail() {
 
         {/* Classification */}
         <ClassificationCard pr={pr} />
+
+        {/* Generated Issue */}
+        <GeneratedIssueCard
+          repo={fullRepo}
+          prNumber={prNumber}
+          initialIssue={generatedIssue}
+        />
 
         {/* LLM Payload */}
         <LLMPayloadCard llmPayload={pr.llm_payload} isLoading={isLoading} />
