@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     reasoning TEXT,
     classified_at TIMESTAMP,
     
+    -- Issue Generation (from issue generation feature - Phase 4) - NULLABLE
+    generated_issue TEXT,
+    issue_generated_at TIMESTAMPTZ,
+    
     -- Constraints
     UNIQUE(repo, pr_number)
 );
@@ -87,6 +91,7 @@ CREATE_INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_pr_is_reproducible ON pull_requests(is_reproducible);",
     "CREATE INDEX IF NOT EXISTS idx_pr_onboarding_suitability ON pull_requests(onboarding_suitability);",
     "CREATE INDEX IF NOT EXISTS idx_pr_repo_url ON pull_requests(repo_url);",
+    "CREATE INDEX IF NOT EXISTS idx_pr_has_generated_issue ON pull_requests(id) WHERE generated_issue IS NOT NULL;",
 ]
 
 DROP_TABLE_SQL = "DROP TABLE IF EXISTS pull_requests CASCADE;"
@@ -175,7 +180,8 @@ def verify_schema(conn) -> bool:
         expected_indexes = [
             'idx_enrichment_status', 'idx_repo', 'idx_merged_at', 'idx_platform', 
             'idx_pr_favorite', 'idx_pr_difficulty', 'idx_pr_task_clarity',
-            'idx_pr_is_reproducible', 'idx_pr_onboarding_suitability', 'idx_pr_repo_url'
+            'idx_pr_is_reproducible', 'idx_pr_onboarding_suitability', 'idx_pr_repo_url',
+            'idx_pr_has_generated_issue'
         ]
         for idx in expected_indexes:
             if idx in indexes:
