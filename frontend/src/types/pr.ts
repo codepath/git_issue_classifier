@@ -58,6 +58,10 @@ export interface PullRequest {
   
   // Favorite field
   is_favorite?: boolean;
+  
+  // Issue generation fields
+  generated_issue?: string | null;
+  issue_generated_at?: string | null;
 }
 
 export interface PRListResponse {
@@ -69,4 +73,19 @@ export interface PRListResponse {
 
 export interface ReposResponse {
   repos: string[];
+}
+
+// Issue Generation Types
+export interface GeneratedIssue {
+  issue_markdown: string;
+  generated_at: string;
+}
+
+export interface PRContext {
+  pr_context: string;
+  classification_info: string;
+}
+
+export interface IssuePromptTemplate {
+  prompt_template: string;
 }
