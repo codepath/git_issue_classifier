@@ -124,3 +124,55 @@ class LLMClient:
         except Exception as e:
             logger.error(f"LLM API call failed: {e}")
             raise
+    
+    def generate_issue(self, prompt: str) -> str:
+        """
+        Generate a student-facing issue from a PR using LLM.
+        
+        Similar to send_prompt() but specifically for issue generation.
+        Expects plain markdown output (no JSON parsing needed).
+        
+        Args:
+            prompt: The complete prompt including PR context and instructions
+        
+        Returns:
+            str: The generated issue in markdown format (may be empty if LLM returns empty)
+        
+        Raises:
+            Exception: If API call fails (auth, rate limit, network errors, etc.)
+        """
+        try:
+            logger.debug(f"Generating issue with {self.provider} ({len(prompt)} chars)")
+            
+            # Build messages
+            messages = [{"role": "user", "content": prompt}]
+            
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+            }
+            
+            # Make API call
+            response = self.client.chat.completions.create(**kwargs)
+            
+            # Extract response text
+            response_text = response.choices[0].message.content
+            
+            # Log token usage
+            if hasattr(response, "usage") and response.usage:
+                logger.info(
+                    f"Issue generation usage: {response.usage.prompt_tokens} prompt tokens, "
+                    f"{response.usage.completion_tokens} completion tokens, "
+                    f"{response.usage.total_tokens} total"
+                )
+            
+            logger.info(f"Generated issue ({len(response_text) if response_text else 0} chars)")
+            
+            # Return response as-is, even if empty
+            return response_text if response_text else ""
+            
+        except Exception as e:
+            logger.error(f"Issue generation API call failed: {e}")
+            raise
