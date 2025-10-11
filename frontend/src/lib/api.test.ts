@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { toggleFavorite, fetchPRs } from './api'
+import { 
+  toggleFavorite, 
+  fetchPRs,
+  fetchPRContext,
+  fetchDefaultIssuePrompt,
+  fetchGeneratedIssue,
+  generateIssue
+} from './api'
 import type { PullRequest } from '@/types/pr'
 
 // Mock fetch globally
@@ -164,6 +171,218 @@ describe('fetchPRs with isFavorite filter', () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('is_favorite=false')
+    )
+  })
+})
+
+// ============================================================================
+// Issue Generation API Tests
+// ============================================================================
+
+describe('fetchPRContext', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should fetch PR context successfully', async () => {
+    const mockContext = {
+      pr_context: 'PR context string...',
+      classification_info: 'Difficulty: easy\nTask Clarity: clear'
+    }
+
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockContext,
+    })
+
+    const result = await fetchPRContext('facebook/react', 12345)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/prs/facebook%2Freact/12345/context'
+    )
+    expect(result).toEqual(mockContext)
+  })
+
+  it('should throw error when PR not found', async () => {
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    })
+
+    await expect(fetchPRContext('facebook/react', 99999)).rejects.toThrow(
+      'PR not found: facebook/react#99999'
+    )
+  })
+})
+
+describe('fetchDefaultIssuePrompt', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should fetch default prompt template', async () => {
+    const mockResponse = {
+      prompt_template: 'You are helping create training exercises...'
+    }
+
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    })
+
+    const result = await fetchDefaultIssuePrompt()
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/prompts/issue-generation')
+    expect(result).toBe(mockResponse.prompt_template)
+  })
+
+  it('should throw error on fetch failure', async () => {
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Internal Server Error',
+    })
+
+    await expect(fetchDefaultIssuePrompt()).rejects.toThrow(
+      'Failed to fetch prompt template: Internal Server Error'
+    )
+  })
+})
+
+describe('fetchGeneratedIssue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should fetch generated issue when exists', async () => {
+    const mockIssue = {
+      issue_markdown: '# Test Issue\n\n## Motivation\n...',
+      generated_at: '2025-10-11T10:30:00Z'
+    }
+
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => mockIssue,
+    })
+
+    const result = await fetchGeneratedIssue('facebook/react', 12345)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/prs/facebook%2Freact/12345/generated-issue'
+    )
+    expect(result).toEqual(mockIssue)
+  })
+
+  it('should return null when no issue generated (404)', async () => {
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    })
+
+    const result = await fetchGeneratedIssue('facebook/react', 12345)
+
+    expect(result).toBeNull()
+  })
+
+  it('should throw error on other failures', async () => {
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    })
+
+    await expect(fetchGeneratedIssue('facebook/react', 12345)).rejects.toThrow(
+      'Failed to fetch generated issue: Internal Server Error'
+    )
+  })
+})
+
+describe('generateIssue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should generate issue with default prompt', async () => {
+    const mockResponse = {
+      issue_markdown: '# Generated Issue\n\n## Motivation\n...',
+      generated_at: '2025-10-11T10:30:00Z'
+    }
+
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    })
+
+    const result = await generateIssue('facebook/react', 12345)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/prs/facebook%2Freact/12345/generate-issue',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          custom_prompt_template: null,
+        }),
+      }
+    )
+    expect(result).toEqual(mockResponse)
+  })
+
+  it('should generate issue with custom prompt template', async () => {
+    const customPrompt = 'Custom prompt: {pr_context}\n{classification_info}'
+    const mockResponse = {
+      issue_markdown: '# Custom Issue\n...',
+      generated_at: '2025-10-11T10:30:00Z'
+    }
+
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    })
+
+    const result = await generateIssue('facebook/react', 12345, customPrompt)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/prs/facebook%2Freact/12345/generate-issue',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          custom_prompt_template: customPrompt,
+        }),
+      }
+    )
+    expect(result).toEqual(mockResponse)
+  })
+
+  it('should throw error when PR not found', async () => {
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    })
+
+    await expect(generateIssue('facebook/react', 99999)).rejects.toThrow(
+      'PR not found: facebook/react#99999'
+    )
+  })
+
+  it('should throw error with response text on failure', async () => {
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: async () => 'LLM API call failed',
+    })
+
+    await expect(generateIssue('facebook/react', 12345)).rejects.toThrow(
+      'Failed to generate issue:'
     )
   })
 })

@@ -896,6 +896,167 @@ class TestGetSinglePR:
             assert "Fix bug" in data["llm_payload"]
 
 
+class TestPRContext:
+    """Tests for GET /api/prs/{repo}/{pr_number}/context endpoint."""
+
+    def test_get_pr_context_with_classification(self, client, mock_supabase):
+        """Test getting PR context with classification data."""
+        # Mock get_pr_by_number to return a classified PR
+        mock_pr = {
+            "id": 1,
+            "repo": "facebook/react",
+            "pr_number": 12345,
+            "title": "Fix button overflow",
+            "body": "Fixes issue with button text overflow",
+            "merged_at": "2024-01-01T00:00:00Z",
+            "files": {
+                "files": [{
+                    "filename": "src/Button.css",
+                    "status": "modified",
+                    "additions": 3,
+                    "deletions": 1,
+                    "patch": "+  overflow: auto;"
+                }]
+            },
+            "classified_at": "2024-01-02T00:00:00Z",
+            "difficulty": "easy",
+            "task_clarity": "clear",
+            "onboarding_suitability": "excellent",
+            "is_reproducible": "highly likely",
+            "categories": ["bug-fix", "ui/ux"],
+            "concepts_taught": ["CSS", "Internationalization"],
+            "prerequisites": ["Basic HTML/CSS"],
+            "reasoning": "Simple CSS fix with clear reproduction steps"
+        }
+        mock_supabase.get_pr_by_number.return_value = mock_pr
+
+        # Make request
+        response = client.get("/api/prs/facebook/react/12345/context")
+
+        # Assertions
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Check both components are present
+        assert "pr_context" in data
+        assert "classification_info" in data
+        
+        # Verify pr_context contains PR information
+        assert "Fix button overflow" in data["pr_context"]
+        assert "facebook/react" in data["pr_context"]
+        assert "Button.css" in data["pr_context"]
+        
+        # Verify classification_info contains classification fields
+        classification_info = data["classification_info"]
+        assert "Difficulty: easy" in classification_info
+        assert "Task Clarity: clear" in classification_info
+        assert "Onboarding Suitability: excellent" in classification_info
+        assert "Is Reproducible: highly likely" in classification_info
+        assert "bug-fix, ui/ux" in classification_info
+        assert "CSS, Internationalization" in classification_info
+        assert "Basic HTML/CSS" in classification_info
+        assert "Simple CSS fix" in classification_info
+
+        # Verify get_pr_by_number was called
+        mock_supabase.get_pr_by_number.assert_called_once_with("facebook/react", 12345)
+
+    def test_get_pr_context_without_classification(self, client, mock_supabase):
+        """Test getting PR context for unclassified PR."""
+        # Mock get_pr_by_number to return an unclassified PR
+        mock_pr = {
+            "id": 2,
+            "repo": "apache/superset",
+            "pr_number": 999,
+            "title": "Add new feature",
+            "body": "Adds a cool new feature",
+            "merged_at": "2024-01-01T00:00:00Z",
+            "classified_at": None,  # Not classified
+            "files": {"files": []}
+        }
+        mock_supabase.get_pr_by_number.return_value = mock_pr
+
+        # Make request
+        response = client.get("/api/prs/apache/superset/999/context")
+
+        # Assertions
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "pr_context" in data
+        assert "classification_info" in data
+        
+        # Verify pr_context contains PR information
+        assert "Add new feature" in data["pr_context"]
+        assert "apache/superset" in data["pr_context"]
+        
+        # Verify classification_info indicates no classification
+        assert data["classification_info"] == "No classification available"
+
+    def test_get_pr_context_pr_not_found(self, client, mock_supabase):
+        """Test 404 error when PR doesn't exist."""
+        # Mock get_pr_by_number to return None
+        mock_supabase.get_pr_by_number.return_value = None
+
+        # Make request
+        response = client.get("/api/prs/fake/repo/99999/context")
+
+        # Assertions
+        assert response.status_code == 404
+        data = response.json()
+        assert "detail" in data
+        assert "not found" in data["detail"].lower()
+
+
+class TestIssueGenerationPrompt:
+    """Tests for GET /api/prompts/issue-generation endpoint."""
+
+    def test_get_issue_generation_prompt_success(self, client, mock_supabase):
+        """Test retrieving the default issue generation prompt template."""
+        # Make request (no mocking needed - just returns a constant)
+        response = client.get("/api/prompts/issue-generation")
+
+        # Assertions
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Check required field
+        assert "prompt_template" in data
+        
+        # Verify it's a non-empty string
+        assert isinstance(data["prompt_template"], str)
+        assert len(data["prompt_template"]) > 0
+        
+        # Verify it contains key elements of issue generation prompt
+        prompt = data["prompt_template"]
+        assert "Motivation" in prompt
+        assert "Current Behavior" in prompt
+        assert "Expected Behavior" in prompt
+        assert "Verification" in prompt
+        assert "{pr_context}" in prompt
+        assert "{classification_info}" in prompt
+
+    def test_get_issue_generation_prompt_structure(self, client, mock_supabase):
+        """Test that the prompt template has the expected structure."""
+        # Make request
+        response = client.get("/api/prompts/issue-generation")
+
+        # Assertions
+        assert response.status_code == 200
+        data = response.json()
+        
+        prompt = data["prompt_template"]
+        
+        # Verify prompt includes guidelines for different sections
+        assert "Reproduction Steps" in prompt
+        assert "Acceptance Criteria" in prompt
+        
+        # Verify difficulty considerations are mentioned
+        assert "trivial" in prompt.lower() or "Trivial" in prompt
+        assert "easy" in prompt.lower() or "Easy" in prompt
+        assert "medium" in prompt.lower() or "Medium" in prompt
+        assert "hard" in prompt.lower() or "Hard" in prompt
+
+
 class TestListRepos:
     """Tests for GET /api/repos endpoint."""
 

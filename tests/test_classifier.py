@@ -140,6 +140,95 @@ class TestLLMClient:
         # Verify
         assert result == "Test response"
         mock_client.chat.completions.create.assert_called_once()
+    
+    @patch('classifier.llm_client.OpenAI')
+    def test_generate_issue_success(self, mock_openai_class):
+        """Test successful issue generation."""
+        # Mock OpenAI client
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_markdown = """# Fix button overflow
+        
+## Motivation
+Users in Japan report that button text is cut off.
+
+## Current Behavior
+The button container doesn't expand for longer text.
+
+## Expected Behavior
+Button should resize to accommodate text.
+
+## Verification
+Test with Japanese locale."""
+        
+        mock_response.choices = [Mock(message=Mock(content=mock_markdown))]
+        mock_response.usage = Mock(
+            prompt_tokens=200,
+            completion_tokens=100,
+            total_tokens=300
+        )
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+        
+        # Create client and generate issue
+        client = LLMClient(
+            provider="anthropic",
+            model="claude-3-5-sonnet-20241022",
+            api_key="test_key"
+        )
+        result = client.generate_issue("Generate an issue for this PR...")
+        
+        # Verify
+        assert result == mock_markdown
+        assert "# Fix button overflow" in result
+        assert "## Motivation" in result
+        mock_client.chat.completions.create.assert_called_once()
+    
+    @patch('classifier.llm_client.OpenAI')
+    def test_generate_issue_empty_response(self, mock_openai_class):
+        """Test issue generation with empty LLM response."""
+        # Mock OpenAI client to return empty string
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content=""))]
+        mock_response.usage = Mock(
+            prompt_tokens=100,
+            completion_tokens=0,
+            total_tokens=100
+        )
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+        
+        # Create client and generate issue
+        client = LLMClient(
+            provider="anthropic",
+            model="claude-3-5-sonnet-20241022",
+            api_key="test_key"
+        )
+        result = client.generate_issue("Generate an issue...")
+        
+        # Should return empty string without error
+        assert result == ""
+        mock_client.chat.completions.create.assert_called_once()
+    
+    @patch('classifier.llm_client.OpenAI')
+    def test_generate_issue_api_error(self, mock_openai_class):
+        """Test issue generation with API error."""
+        # Mock OpenAI client to raise an exception
+        mock_client = Mock()
+        mock_client.chat.completions.create.side_effect = Exception("API rate limit exceeded")
+        mock_openai_class.return_value = mock_client
+        
+        # Create client and generate issue
+        client = LLMClient(
+            provider="anthropic",
+            model="claude-3-5-sonnet-20241022",
+            api_key="test_key"
+        )
+        
+        # Should raise the exception
+        with pytest.raises(Exception, match="API rate limit exceeded"):
+            client.generate_issue("Generate an issue...")
 
 
 class TestClassifier:
