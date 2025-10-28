@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchPRs, fetchRepos, toggleFavorite } from "@/lib/api";
 import type { PullRequest, PRListResponse } from "@/types/pr";
 import { Badge } from "@/components/ui/badge";
@@ -15,20 +14,35 @@ function getDateMonthsAgo(months: number): string {
 function PRList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedRepo, setSelectedRepo] = useState<string>("");
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
   const perPage = 50;
   
-  // Date cutoff and sort order state
-  const [cutoffDate, setCutoffDate] = useState<string>(getDateMonthsAgo(3)); // Default: 3 months ago
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc"); // Default: oldest first (chronological)
-  
-  // Classification filter state
-  const [onboardingSuitability, setOnboardingSuitability] = useState<string>("");
-  const [difficulty, setDifficulty] = useState<string>("");
-  
-  // Favorite filter state
-  const [showOnlyFavorites, setShowOnlyFavorites] = useState<boolean>(false);
+  // Read filter state from URL params with defaults
+  const selectedRepo = searchParams.get("repo") || "";
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const cutoffDate = searchParams.get("date") || getDateMonthsAgo(3);
+  const sortParam = searchParams.get("sort");
+  const sortOrder = (sortParam === "asc" || sortParam === "desc") ? sortParam : "asc";
+  const onboardingSuitability = searchParams.get("suitability") || "";
+  const difficulty = searchParams.get("difficulty") || "";
+  const showOnlyFavorites = searchParams.get("favorites") === "true";
+
+  // Helper function to update URL search params
+  const updateSearchParams = (updates: Record<string, string | number | boolean | null>) => {
+    const newParams = new URLSearchParams(searchParams);
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === "" || value === false) {
+        // Remove param if value is empty/null/false
+        newParams.delete(key);
+      } else {
+        // Set param (convert to string)
+        newParams.set(key, String(value));
+      }
+    });
+    
+    setSearchParams(newParams);
+  };
 
   // Fetch repositories for filter dropdown
   const { data: reposData } = useQuery({
@@ -168,8 +182,10 @@ function PRList() {
             <select
               value={selectedRepo}
               onChange={(e) => {
-                setSelectedRepo(e.target.value);
-                setPage(1); // Reset to first page when filter changes
+                updateSearchParams({
+                  repo: e.target.value,
+                  page: 1 // Reset to first page when filter changes
+                });
               }}
               className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
@@ -193,8 +209,10 @@ function PRList() {
                 type="date"
                 value={cutoffDate}
                 onChange={(e) => {
-                  setCutoffDate(e.target.value);
-                  setPage(1); // Reset to first page when filter changes
+                  updateSearchParams({
+                    date: e.target.value,
+                    page: 1 // Reset to first page when filter changes
+                  });
                 }}
                 className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -208,8 +226,10 @@ function PRList() {
               <select
                 value={sortOrder}
                 onChange={(e) => {
-                  setSortOrder(e.target.value as "asc" | "desc");
-                  setPage(1); // Reset to first page when sort changes
+                  updateSearchParams({
+                    sort: e.target.value,
+                    page: 1 // Reset to first page when sort changes
+                  });
                 }}
                 className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -233,8 +253,10 @@ function PRList() {
               <select
                 value={onboardingSuitability}
                 onChange={(e) => {
-                  setOnboardingSuitability(e.target.value);
-                  setPage(1);
+                  updateSearchParams({
+                    suitability: e.target.value,
+                    page: 1
+                  });
                 }}
                 className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -252,8 +274,10 @@ function PRList() {
               <select
                 value={difficulty}
                 onChange={(e) => {
-                  setDifficulty(e.target.value);
-                  setPage(1);
+                  updateSearchParams({
+                    difficulty: e.target.value,
+                    page: 1
+                  });
                 }}
                 className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -272,8 +296,10 @@ function PRList() {
                   type="checkbox"
                   checked={showOnlyFavorites}
                   onChange={(e) => {
-                    setShowOnlyFavorites(e.target.checked);
-                    setPage(1);
+                    updateSearchParams({
+                      favorites: e.target.checked,
+                      page: 1
+                    });
                   }}
                   className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
@@ -285,10 +311,12 @@ function PRList() {
             {(onboardingSuitability || difficulty || showOnlyFavorites) && (
               <button
                 onClick={() => {
-                  setOnboardingSuitability("");
-                  setDifficulty("");
-                  setShowOnlyFavorites(false);
-                  setPage(1);
+                  updateSearchParams({
+                    suitability: null,
+                    difficulty: null,
+                    favorites: null,
+                    page: 1
+                  });
                 }}
                 className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
               >
@@ -423,14 +451,14 @@ function PRList() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => updateSearchParams({ page: Math.max(1, page - 1) })}
                   disabled={page === 1}
                   className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => updateSearchParams({ page: Math.min(totalPages, page + 1) })}
                   disabled={page === totalPages}
                   className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
